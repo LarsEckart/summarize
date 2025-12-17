@@ -261,16 +261,22 @@ export const fetchTranscriptFromCaptionTracks = async (
     )
 
     if (!response.ok) {
-      return null
+      return await fetchTranscriptViaAndroidPlayer(fetchImpl, { html, videoId })
     }
 
     const raw = await response.text()
     const sanitized = sanitizeYoutubeJsonResponse(raw)
     const parsed: unknown = JSON.parse(sanitized)
     if (!isObjectLike(parsed)) {
-      return null
+      return await fetchTranscriptViaAndroidPlayer(fetchImpl, { html, videoId })
     }
-    return await extractTranscriptFromPlayerPayload(fetchImpl, parsed)
+
+    const transcript = await extractTranscriptFromPlayerPayload(fetchImpl, parsed)
+    if (transcript) {
+      return transcript
+    }
+
+    return await fetchTranscriptViaAndroidPlayer(fetchImpl, { html, videoId })
   } catch {
     return await fetchTranscriptViaAndroidPlayer(fetchImpl, { html, videoId })
   }
@@ -281,13 +287,14 @@ const extractTranscriptFromPlayerPayload = async (
   payload: Record<string, unknown>
 ): Promise<string | null> => {
   const payloadRecord = payload as CaptionsPayload
+
   const captionsCandidate = payloadRecord.captions
   const captions = isObjectLike(captionsCandidate) ? (captionsCandidate as CaptionsPayload) : null
-  if (!captions) {
-    return null
-  }
 
-  const rendererCandidate = (captions as CaptionsPayload).playerCaptionsTracklistRenderer
+  const rendererCandidate =
+    (captions ? (captions as CaptionsPayload).playerCaptionsTracklistRenderer : null) ??
+    payloadRecord.playerCaptionsTracklistRenderer
+
   const renderer = isObjectLike(rendererCandidate)
     ? (rendererCandidate as CaptionListRenderer)
     : null
@@ -403,6 +410,9 @@ const downloadCaptionTrack = async (
     }
 
     const text = await response.text()
+    if (text.length === 0) {
+      return await downloadXmlTranscript(fetchImpl, baseUrl)
+    }
     const jsonResult = parseJsonTranscript(text)
     if (jsonResult) {
       return jsonResult
