@@ -1,7 +1,14 @@
 import { Command, CommanderError } from 'commander'
 import { createLinkPreviewClient } from './content/index.js'
 import { createFirecrawlScraper } from './firecrawl.js'
-import { parseDurationMs, parseFirecrawlMode, parseLengthArg, parseYoutubeMode } from './flags.js'
+import {
+  parseDurationMs,
+  parseFirecrawlMode,
+  parseLengthArg,
+  parseMarkdownMode,
+  parseYoutubeMode,
+} from './flags.js'
+import { createHtmlToMarkdownConverter } from './llm/html-to-markdown.js'
 import {
   buildLinkSummaryPrompt,
   estimateMaxCompletionTokensForCharacters,
@@ -21,12 +28,15 @@ type JsonOutput = {
     timeoutMs: number
     youtube: string
     firecrawl: string
+    markdown: string
     length: { kind: 'preset'; preset: string } | { kind: 'chars'; maxCharacters: number }
   }
   env: {
     hasOpenAIKey: boolean
     hasApifyToken: boolean
     hasFirecrawlKey: boolean
+    hasGoogleKey: boolean
+    hasAiGatewayKey: boolean
   }
   extracted: unknown
   prompt: string
@@ -57,6 +67,11 @@ function buildProgram() {
     .option(
       '--firecrawl <mode>',
       'Firecrawl usage: off, auto (fallback), always (try Firecrawl first). Note: in --extract-only website mode, defaults to always when FIRECRAWL_API_KEY is set.',
+      'auto'
+    )
+    .option(
+      '--markdown <mode>',
+      'Website Markdown output: off, auto (prefer Firecrawl, then LLM when configured), llm (force LLM). Only affects --extract-only for non-YouTube URLs.',
       'auto'
     )
     .option(
@@ -114,15 +129,18 @@ function attachRichHelp(
 ${heading('Examples')}
   ${cmd('summarize "https://example.com"')}
   ${cmd('summarize "https://example.com" --extract-only')} ${dim('# website markdown (prefers Firecrawl when configured)')}
+  ${cmd('summarize "https://example.com" --extract-only --markdown llm')} ${dim('# website markdown via LLM')}
   ${cmd('summarize "https://www.youtube.com/watch?v=I845O57ZSy4&t=11s" --extract-only --youtube web')}
   ${cmd('summarize "https://example.com" --length 20k --timeout 2m --model gpt-5.2')}
   ${cmd('summarize "https://example.com" --json --verbose')}
 
 ${heading('Env Vars')}
   OPENAI_API_KEY        required for summarization (otherwise prompt-only)
-  OPENAI_MODEL          optional (default: gpt-5.2-mini)
+  OPENAI_MODEL          optional (default: gpt-5.2)
   FIRECRAWL_API_KEY     optional website extraction fallback (Markdown)
   APIFY_API_TOKEN       optional YouTube transcript fallback
+  GOOGLE_GENERATIVE_AI_API_KEY optional LLM website Markdown conversion (Gemini)
+  AI_GATEWAY_API_KEY    optional LLM website Markdown conversion (Vercel AI Gateway)
 `
   )
 }
@@ -155,7 +173,6 @@ async function summarizeWithOpenAI({
       signal: controller.signal,
       body: JSON.stringify({
         model,
-        temperature: 0.2,
         max_completion_tokens: maxOutputTokens,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -373,6 +390,7 @@ export async function runCli(
   const extractOnly = Boolean(program.opts().extractOnly)
   const json = Boolean(program.opts().json)
   const verbose = Boolean(program.opts().verbose)
+  const markdownMode = parseMarkdownMode(program.opts().markdown as string)
 
   const isYoutubeUrl = /youtube\.com|youtu\.be/i.test(url)
   const firecrawlExplicitlySet = normalizedArgv.some(
@@ -387,14 +405,21 @@ export async function runCli(
   const model =
     (typeof program.opts().model === 'string' ? (program.opts().model as string) : null) ??
     env.OPENAI_MODEL ??
-    'gpt-5.2-mini'
+    'gpt-5.2'
 
   const apiKey = typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY : null
   const apifyToken = typeof env.APIFY_API_TOKEN === 'string' ? env.APIFY_API_TOKEN : null
   const firecrawlKey = typeof env.FIRECRAWL_API_KEY === 'string' ? env.FIRECRAWL_API_KEY : null
+  const googleKeyRaw =
+    typeof env.GOOGLE_GENERATIVE_AI_API_KEY === 'string' ? env.GOOGLE_GENERATIVE_AI_API_KEY : null
+  const aiGatewayKeyRaw = typeof env.AI_GATEWAY_API_KEY === 'string' ? env.AI_GATEWAY_API_KEY : null
 
   const firecrawlApiKey = firecrawlKey && firecrawlKey.trim().length > 0 ? firecrawlKey : null
   const firecrawlConfigured = firecrawlApiKey !== null
+  const googleApiKey = googleKeyRaw?.trim() ?? null
+  const aiGatewayApiKey = aiGatewayKeyRaw?.trim() ?? null
+  const googleConfigured = typeof googleApiKey === 'string' && googleApiKey.length > 0
+  const aiGatewayConfigured = typeof aiGatewayApiKey === 'string' && aiGatewayApiKey.length > 0
 
   const verboseColor = supportsColor(stderr, env)
 
@@ -408,18 +433,39 @@ export async function runCli(
     throw new Error('--firecrawl always requires FIRECRAWL_API_KEY')
   }
 
+  const markdownRequested = extractOnly && !isYoutubeUrl && markdownMode !== 'off'
+  const markdownProvider = aiGatewayConfigured
+    ? 'vercel-gateway'
+    : googleConfigured
+      ? 'google'
+      : apiKey
+        ? 'openai'
+        : 'none'
+
+  if (markdownRequested && markdownMode === 'llm' && markdownProvider === 'none') {
+    throw new Error(
+      '--markdown llm requires AI_GATEWAY_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or OPENAI_API_KEY'
+    )
+  }
+
   writeVerbose(
     stderr,
     verbose,
     `config url=${url} timeoutMs=${timeoutMs} youtube=${youtubeMode} firecrawl=${firecrawlMode} length=${
       lengthArg.kind === 'preset' ? lengthArg.preset : `${lengthArg.maxCharacters} chars`
-    } json=${json} extractOnly=${extractOnly} prompt=${printPrompt}`,
+    } json=${json} extractOnly=${extractOnly} prompt=${printPrompt} markdown=${markdownMode}`,
     verboseColor
   )
   writeVerbose(
     stderr,
     verbose,
-    `env openaiKey=${Boolean(apiKey)} apifyToken=${Boolean(apifyToken)} firecrawlKey=${firecrawlConfigured} model=${model}`,
+    `env openaiKey=${Boolean(apiKey)} apifyToken=${Boolean(apifyToken)} firecrawlKey=${firecrawlConfigured} googleKey=${googleConfigured} aiGatewayKey=${aiGatewayConfigured} model=${model}`,
+    verboseColor
+  )
+  writeVerbose(
+    stderr,
+    verbose,
+    `markdown requested=${markdownRequested} provider=${markdownProvider}`,
     verboseColor
   )
 
@@ -428,9 +474,20 @@ export async function runCli(
       ? createFirecrawlScraper({ apiKey: firecrawlApiKey, fetchImpl: fetch })
       : null
 
+  const convertHtmlToMarkdown =
+    markdownRequested && (markdownMode === 'llm' || markdownProvider !== 'none')
+      ? createHtmlToMarkdownConverter({
+          aiGatewayApiKey: aiGatewayConfigured ? aiGatewayApiKey : null,
+          googleApiKey: googleConfigured ? googleApiKey : null,
+          openaiApiKey: apiKey,
+          fetchImpl: fetch,
+        })
+      : null
+
   const client = createLinkPreviewClient({
     apifyApiToken: apifyToken,
     scrapeWithFirecrawl,
+    convertHtmlToMarkdown,
     fetch,
   })
 
@@ -439,6 +496,7 @@ export async function runCli(
     timeoutMs,
     youtubeTranscript: youtubeMode,
     firecrawl: firecrawlMode,
+    format: markdownRequested ? 'markdown' : 'text',
   })
   writeVerbose(
     stderr,
@@ -464,6 +522,14 @@ export async function runCli(
     `extract firecrawl attempted=${extracted.diagnostics.firecrawl.attempted} used=${extracted.diagnostics.firecrawl.used} notes=${formatOptionalString(
       extracted.diagnostics.firecrawl.notes ?? null
     )}`,
+    verboseColor
+  )
+  writeVerbose(
+    stderr,
+    verbose,
+    `extract markdown requested=${extracted.diagnostics.markdown.requested} used=${extracted.diagnostics.markdown.used} provider=${formatOptionalString(
+      extracted.diagnostics.markdown.provider ?? null
+    )} notes=${formatOptionalString(extracted.diagnostics.markdown.notes ?? null)}`,
     verboseColor
   )
   writeVerbose(
@@ -503,6 +569,7 @@ export async function runCli(
           timeoutMs,
           youtube: youtubeMode,
           firecrawl: firecrawlMode,
+          markdown: markdownMode,
           length:
             lengthArg.kind === 'preset'
               ? { kind: 'preset', preset: lengthArg.preset }
@@ -512,6 +579,8 @@ export async function runCli(
           hasOpenAIKey: Boolean(apiKey),
           hasApifyToken: Boolean(apifyToken),
           hasFirecrawlKey: firecrawlConfigured,
+          hasGoogleKey: googleConfigured,
+          hasAiGatewayKey: aiGatewayConfigured,
         },
         extracted,
         prompt,
@@ -544,6 +613,7 @@ export async function runCli(
           timeoutMs,
           youtube: youtubeMode,
           firecrawl: firecrawlMode,
+          markdown: markdownMode,
           length:
             lengthArg.kind === 'preset'
               ? { kind: 'preset', preset: lengthArg.preset }
@@ -553,6 +623,8 @@ export async function runCli(
           hasOpenAIKey: Boolean(apiKey),
           hasApifyToken: Boolean(apifyToken),
           hasFirecrawlKey: firecrawlConfigured,
+          hasGoogleKey: googleConfigured,
+          hasAiGatewayKey: aiGatewayConfigured,
         },
         extracted,
         prompt,
@@ -678,6 +750,7 @@ export async function runCli(
         timeoutMs,
         youtube: youtubeMode,
         firecrawl: firecrawlMode,
+        markdown: markdownMode,
         length:
           lengthArg.kind === 'preset'
             ? { kind: 'preset', preset: lengthArg.preset }
@@ -687,6 +760,8 @@ export async function runCli(
         hasOpenAIKey: true,
         hasApifyToken: Boolean(apifyToken),
         hasFirecrawlKey: firecrawlConfigured,
+        hasGoogleKey: googleConfigured,
+        hasAiGatewayKey: aiGatewayConfigured,
       },
       extracted,
       prompt,

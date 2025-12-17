@@ -49,4 +49,42 @@ describe('cli error handling', () => {
       })
     ).rejects.toThrow('--firecrawl always requires FIRECRAWL_API_KEY')
   })
+
+  it('errors when --markdown llm is set without any LLM keys', async () => {
+    await expect(
+      runCli(['--markdown', 'llm', '--extract-only', 'https://example.com'], {
+        env: {},
+        fetch: vi.fn(
+          async () => new Response('<html></html>', { status: 200 })
+        ) as unknown as typeof fetch,
+        stdout: noopStream(),
+        stderr: noopStream(),
+      })
+    ).rejects.toThrow(/--markdown llm requires/)
+  })
+
+  it('does not error for --markdown auto without keys', async () => {
+    const html = `<!doctype html><html><head><title>Ok</title></head><body><article><p>${'A'.repeat(
+      260
+    )}</p></article></body></html>`
+
+    const fetchMock = vi.fn(async () => new Response(html, { status: 200 }))
+
+    let stdoutText = ''
+    const stdout = new Writable({
+      write(chunk, _encoding, callback) {
+        stdoutText += chunk.toString()
+        callback()
+      },
+    })
+
+    await runCli(['--markdown', 'auto', '--extract-only', 'https://example.com'], {
+      env: {},
+      fetch: fetchMock as unknown as typeof fetch,
+      stdout,
+      stderr: noopStream(),
+    })
+
+    expect(stdoutText.length).toBeGreaterThan(0)
+  })
 })

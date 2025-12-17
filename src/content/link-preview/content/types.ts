@@ -3,11 +3,13 @@ import type { ContentFetchDiagnostics, TranscriptDiagnostics, TranscriptSource }
 export const DEFAULT_TIMEOUT_MS = 120_000
 export type YoutubeTranscriptMode = 'auto' | 'web' | 'apify'
 export type FirecrawlMode = 'off' | 'auto' | 'always'
+export type ContentFormat = 'text' | 'markdown'
 
 export interface FetchLinkContentOptions {
   timeoutMs?: number
   youtubeTranscript?: YoutubeTranscriptMode
   firecrawl?: FirecrawlMode
+  format?: ContentFormat
 }
 
 export interface TranscriptResolution {

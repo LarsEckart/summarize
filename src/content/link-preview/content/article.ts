@@ -5,6 +5,51 @@ import { decodeHtmlEntities, normalizeWhitespace } from './cleaner.js'
 
 const MIN_SEGMENT_LENGTH = 30
 
+export function sanitizeHtmlForMarkdownConversion(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: [
+      'article',
+      'section',
+      'div',
+      'p',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'ol',
+      'ul',
+      'li',
+      'blockquote',
+      'pre',
+      'code',
+      'span',
+      'strong',
+      'em',
+      'br',
+      'a',
+    ],
+    allowedAttributes: {
+      a: ['href'],
+    },
+    nonTextTags: [
+      'style',
+      'script',
+      'noscript',
+      'template',
+      'svg',
+      'canvas',
+      'iframe',
+      'object',
+      'embed',
+    ],
+    textFilter(text: string) {
+      return decodeHtmlEntities(text)
+    },
+  })
+}
+
 export function extractArticleContent(html: string): string {
   const segments = collectSegmentsFromHtml(html)
   if (segments.length > 0) {

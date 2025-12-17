@@ -4,6 +4,7 @@ import {
   parseDurationMs,
   parseFirecrawlMode,
   parseLengthArg,
+  parseMarkdownMode,
   parseYoutubeMode,
 } from '../src/flags.js'
 
@@ -29,6 +30,13 @@ describe('cli flag parsing', () => {
     expect(parseFirecrawlMode('auto')).toBe('auto')
     expect(parseFirecrawlMode('always')).toBe('always')
     expect(() => parseFirecrawlMode('nope')).toThrow(/Unsupported --firecrawl/)
+  })
+
+  it('parses --markdown', () => {
+    expect(parseMarkdownMode('off')).toBe('off')
+    expect(parseMarkdownMode('auto')).toBe('auto')
+    expect(parseMarkdownMode('llm')).toBe('llm')
+    expect(() => parseMarkdownMode('nope')).toThrow(/Unsupported --markdown/)
   })
 
   it('parses --length as preset or character count', () => {

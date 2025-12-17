@@ -1,9 +1,9 @@
 import type { FirecrawlScrapeResult, LinkPreviewDeps } from '../deps.js'
 import { resolveTranscriptForLink } from '../transcript/index.js'
 import { isYouTubeUrl } from '../transcript/utils.js'
-import type { FirecrawlDiagnostics } from '../types.js'
+import type { FirecrawlDiagnostics, MarkdownDiagnostics } from '../types.js'
 
-import { extractArticleContent } from './article.js'
+import { extractArticleContent, sanitizeHtmlForMarkdownConversion } from './article.js'
 import { normalizeForPrompt } from './cleaner.js'
 import { fetchHtmlDocument, fetchWithFirecrawl } from './fetcher.js'
 import { extractMetadataFromFirecrawl, extractMetadataFromHtml } from './parsers.js'
@@ -61,6 +61,7 @@ export async function fetchLinkContent(
   const timeoutMs = resolveTimeoutMs(options)
   const youtubeTranscriptMode = options?.youtubeTranscript ?? 'auto'
   const firecrawlMode = resolveFirecrawlMode(options)
+  const markdownRequested = (options?.format ?? 'text') === 'markdown'
 
   const canUseFirecrawl =
     firecrawlMode !== 'off' && deps.scrapeWithFirecrawl !== null && !isYouTubeUrl(url)
@@ -94,6 +95,7 @@ export async function fetchLinkContent(
       payload: firecrawlPayload,
       youtubeTranscriptMode,
       firecrawlDiagnostics,
+      markdownRequested,
       deps,
     })
     if (firecrawlResult) {
@@ -157,6 +159,8 @@ export async function fetchLinkContent(
     html,
     youtubeTranscriptMode,
     firecrawlDiagnostics,
+    markdownRequested,
+    timeoutMs,
     deps,
   })
 }
@@ -166,12 +170,14 @@ async function buildResultFromFirecrawl({
   payload,
   youtubeTranscriptMode,
   firecrawlDiagnostics,
+  markdownRequested,
   deps,
 }: {
   url: string
   payload: FirecrawlScrapeResult
   youtubeTranscriptMode: FetchLinkContentOptions['youtubeTranscript']
   firecrawlDiagnostics: FirecrawlDiagnostics
+  markdownRequested: boolean
   deps: LinkPreviewDeps
 }): Promise<ExtractedLinkContent | null> {
   const normalizedMarkdown = normalizeForPrompt(payload.markdown ?? '')
@@ -218,6 +224,11 @@ async function buildResultFromFirecrawl({
     diagnostics: {
       strategy: 'firecrawl',
       firecrawl: firecrawlDiagnostics,
+      markdown: {
+        requested: markdownRequested,
+        used: true,
+        provider: 'firecrawl',
+      },
       transcript: transcriptDiagnostics,
     },
   })
@@ -228,12 +239,16 @@ async function buildResultFromHtmlDocument({
   html,
   youtubeTranscriptMode,
   firecrawlDiagnostics,
+  markdownRequested,
+  timeoutMs,
   deps,
 }: {
   url: string
   html: string
   youtubeTranscriptMode: FetchLinkContentOptions['youtubeTranscript']
   firecrawlDiagnostics: FirecrawlDiagnostics
+  markdownRequested: boolean
+  timeoutMs: number
   deps: LinkPreviewDeps
 }): Promise<ExtractedLinkContent> {
   const { title, description, siteName } = extractMetadataFromHtml(html, url)
@@ -254,6 +269,61 @@ async function buildResultFromHtmlDocument({
 
   const transcriptDiagnostics = ensureTranscriptDiagnostics(transcriptResolution)
 
+  const markdownDiagnostics: MarkdownDiagnostics = await (async () => {
+    if (!markdownRequested) {
+      return { requested: false, used: false, provider: null, notes: null }
+    }
+
+    if (isYouTubeUrl(url)) {
+      return {
+        requested: true,
+        used: false,
+        provider: null,
+        notes: 'Skipping Markdown conversion for YouTube URLs',
+      }
+    }
+
+    if (!deps.convertHtmlToMarkdown) {
+      return {
+        requested: true,
+        used: false,
+        provider: null,
+        notes: 'No HTML→Markdown converter configured',
+      }
+    }
+
+    try {
+      const sanitizedHtml = sanitizeHtmlForMarkdownConversion(html)
+      const markdown = await deps.convertHtmlToMarkdown({
+        url,
+        html: sanitizedHtml,
+        title,
+        siteName,
+        timeoutMs,
+      })
+      const normalizedMarkdown = normalizeForPrompt(markdown)
+      if (normalizedMarkdown.length === 0) {
+        return {
+          requested: true,
+          used: false,
+          provider: null,
+          notes: 'HTML→Markdown conversion returned empty content',
+        }
+      }
+
+      baseContent = normalizedMarkdown
+      return { requested: true, used: true, provider: 'llm', notes: null }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        requested: true,
+        used: false,
+        provider: null,
+        notes: `HTML→Markdown conversion failed: ${message}`,
+      }
+    }
+  })()
+
   return finalizeExtractedLinkContent({
     url,
     baseContent,
@@ -264,6 +334,7 @@ async function buildResultFromHtmlDocument({
     diagnostics: {
       strategy: 'html',
       firecrawl: firecrawlDiagnostics,
+      markdown: markdownDiagnostics,
       transcript: transcriptDiagnostics,
     },
   })

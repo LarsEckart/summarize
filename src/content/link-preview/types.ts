@@ -20,9 +20,17 @@ export interface FirecrawlDiagnostics {
   notes?: string | null
 }
 
+export interface MarkdownDiagnostics {
+  requested: boolean
+  used: boolean
+  provider: 'firecrawl' | 'llm' | null
+  notes?: string | null
+}
+
 export interface ContentFetchDiagnostics {
   strategy: 'firecrawl' | 'html'
   firecrawl: FirecrawlDiagnostics
+  markdown: MarkdownDiagnostics
   transcript: TranscriptDiagnostics
 }
 

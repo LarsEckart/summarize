@@ -8,3 +8,5 @@
 - `--length` is intended for summarization guidance; extraction prints full content.
 - For non-YouTube URLs, the CLI prefers Firecrawl Markdown by default when `FIRECRAWL_API_KEY` is configured.
   - Force plain HTML extraction with `--firecrawl off`.
+- For non-YouTube URLs, `--markdown auto` can convert HTML → Markdown via an LLM when configured.
+  - Force it with `--markdown llm`.

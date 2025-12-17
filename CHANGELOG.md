@@ -14,6 +14,7 @@ All notable changes to this project are documented here.
   - fallback to `ytInitialPlayerResponse.videoDetails.shortDescription` when transcripts are unavailable
 - OpenAI summarization (Chat Completions API) with default model `gpt-5.2` (`OPENAI_API_KEY`, optional `OPENAI_MODEL`).
 - `--extract-only` prefers Firecrawl Markdown for websites when `FIRECRAWL_API_KEY` is configured (override via `--firecrawl off`).
+- `--extract-only --markdown auto|llm` can convert HTML → Markdown via an LLM (Gemini via `GOOGLE_GENERATIVE_AI_API_KEY` or Vercel AI Gateway via `AI_GATEWAY_API_KEY`).
 - CLI defaults: `--timeout 2m`.
 - `--help` includes examples and required env vars.
 - `--extract-only` (no LLM call), `--prompt` (prompt-only), `--json` (structured output), `--verbose`.

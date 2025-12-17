@@ -2,6 +2,7 @@ import type { SummaryLength } from './shared/contracts.js'
 
 export type YoutubeMode = 'auto' | 'web' | 'apify'
 export type FirecrawlMode = 'off' | 'auto' | 'always'
+export type MarkdownMode = 'off' | 'auto' | 'llm'
 
 export type LengthArg =
   | { kind: 'preset'; preset: SummaryLength }
@@ -22,6 +23,12 @@ export function parseFirecrawlMode(raw: string): FirecrawlMode {
   const normalized = raw.trim().toLowerCase()
   if (normalized === 'off' || normalized === 'auto' || normalized === 'always') return normalized
   throw new Error(`Unsupported --firecrawl: ${raw}`)
+}
+
+export function parseMarkdownMode(raw: string): MarkdownMode {
+  const normalized = raw.trim().toLowerCase()
+  if (normalized === 'off' || normalized === 'auto' || normalized === 'llm') return normalized
+  throw new Error(`Unsupported --markdown: ${raw}`)
 }
 
 export function parseDurationMs(raw: string): number {

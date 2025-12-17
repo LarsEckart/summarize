@@ -21,6 +21,7 @@ Docs (by mode):
   - Apify transcript actor (optional fallback, requires `APIFY_API_TOKEN`)
   - If transcripts are blocked, we still extract `ytInitialPlayerResponse.videoDetails.shortDescription` so YouTube links summarize meaningfully.
 - **Firecrawl fallback for blocked sites**: if direct HTML fetching is blocked or yields too little content, we retry via Firecrawl to get Markdown (requires `FIRECRAWL_API_KEY`).
+- **LLM HTML→Markdown (optional)**: in `--extract-only` website mode, `--markdown auto|llm` can convert HTML → clean Markdown (Gemini/OpenAI, depending on which keys are configured).
 - **Prompt-only mode**: print the generated prompt and use any model/provider you want.
 - **OpenAI mode**: if `OPENAI_API_KEY` is set, calls the Chat Completions API and prints the model output.
 - **Structured output**: `--json` emits a single JSON object with extraction diagnostics + the prompt + (optional) summary.
@@ -75,7 +76,7 @@ summarize "https://example.com" --prompt
 Change model, length, YouTube mode, and timeout:
 
 ```bash
-summarize "https://example.com" --length 20k --timeout 30s --model gpt-5.2-mini
+summarize "https://example.com" --length 20k --timeout 30s --model gpt-5.2
 summarize "https://www.youtube.com/watch?v=I845O57ZSy4&t=11s" --youtube auto --length 8k
 ```
 
@@ -95,10 +96,14 @@ summarize "https://example.com" --json
   - `off`: never use Firecrawl
   - `auto` (default): use Firecrawl only as a fallback when HTML fetch/extraction looks blocked or too thin
   - `always`: try Firecrawl first (still falls back to HTML when Firecrawl is unavailable/empty)
+- `--markdown off|auto|llm`
+  - `off`: never attempt LLM HTML→Markdown conversion
+  - `auto` (default): in `--extract-only` website mode, prefer Firecrawl Markdown when configured; otherwise convert via LLM when configured
+  - `llm`: force LLM HTML→Markdown conversion (errors when no LLM keys are configured)
 - `--length short|medium|long|xl|xxl|<chars>`
   - Presets influence formatting; `<chars>` (e.g. `20k`, `1500`) adds a soft “target length” instruction (no hard truncation).
 - `--timeout <duration>`: `30` (seconds), `30s`, `2m`, `5000ms` (default: `2m`)
-- `--model <model>`: default `gpt-5.2-mini` (or `OPENAI_MODEL`)
+- `--model <model>`: default `gpt-5.2` (or `OPENAI_MODEL`)
 - `--prompt`: print prompt and exit (never calls OpenAI)
 - `--extract-only`: print extracted content and exit (never calls OpenAI)
 - `--json`: emit a single JSON object instead of plain text
@@ -111,7 +116,7 @@ summarize "https://example.com" --json
 If `OPENAI_API_KEY` is **not** set, the CLI prints the prompt instead of calling an LLM.
 
 - `OPENAI_API_KEY` (required to call OpenAI)
-- `OPENAI_MODEL` (optional, default: `gpt-5.2-mini`)
+- `OPENAI_MODEL` (optional, default: `gpt-5.2`)
 
 ### Apify (optional YouTube fallback)
 
@@ -125,13 +130,21 @@ Used only as a fallback for non-YouTube URLs when direct HTML fetching/extractio
 
 - `FIRECRAWL_API_KEY` (optional)
 
+### LLM website Markdown (optional)
+
+Used only for `--extract-only` website URLs when `--markdown auto|llm` is enabled.
+
+- `AI_GATEWAY_API_KEY` (optional; uses Vercel AI Gateway; default model `google/gemini-3-flash`)
+- `GOOGLE_GENERATIVE_AI_API_KEY` (optional; calls Gemini directly; default model `gemini-3-flash`)
+- `OPENAI_API_KEY` (optional fallback for Markdown conversion when neither Gemini key is present; default model `gpt-5.2`)
+
 ## Library API (for other Node programs)
 
 `@steipete/summarize` exports entry points:
 
 - `@steipete/summarize/content`
-  - `createLinkPreviewClient({ fetch?, scrapeWithFirecrawl?, apifyApiToken? })`
-  - `client.fetchLinkContent(url, { timeoutMs?, youtubeTranscript?, firecrawl? })`
+  - `createLinkPreviewClient({ fetch?, scrapeWithFirecrawl?, apifyApiToken?, convertHtmlToMarkdown? })`
+  - `client.fetchLinkContent(url, { timeoutMs?, youtubeTranscript?, firecrawl?, format? })`
 - `@steipete/summarize/prompts`
   - `buildLinkSummaryPrompt(...)` (`summaryLength` supports presets or `{ maxCharacters }`)
   - `SUMMARY_LENGTH_TO_TOKENS`

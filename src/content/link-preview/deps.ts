@@ -9,8 +9,17 @@ export type ScrapeWithFirecrawl = (
   options?: { timeoutMs?: number }
 ) => Promise<FirecrawlScrapeResult | null>
 
+export type ConvertHtmlToMarkdown = (args: {
+  url: string
+  html: string
+  title: string | null
+  siteName: string | null
+  timeoutMs: number
+}) => Promise<string>
+
 export interface LinkPreviewDeps {
   fetch: typeof fetch
   scrapeWithFirecrawl: ScrapeWithFirecrawl | null
   apifyApiToken: string | null
+  convertHtmlToMarkdown: ConvertHtmlToMarkdown | null
 }
