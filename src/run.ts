@@ -23,6 +23,8 @@ import {
   estimateMaxCompletionTokensForCharacters,
   SUMMARY_LENGTH_TO_TOKENS,
 } from './prompts/index.js'
+import { startOscProgress } from './tty/osc-progress.js'
+import { startSpinner } from './tty/spinner.js'
 
 type RunEnv = {
   env: Record<string, string | undefined>
@@ -675,12 +677,32 @@ export async function runCli(
   })
 
   writeVerbose(stderr, verbose, 'extract start', verboseColor)
-  const extracted = await client.fetchLinkContent(url, {
-    timeoutMs,
-    youtubeTranscript: youtubeMode,
-    firecrawl: firecrawlMode,
-    format: markdownRequested ? 'markdown' : 'text',
+  const progressEnabled = isRichTty(stderr) && !verbose && !json
+  const stopOscProgress = startOscProgress({
+    label: 'Fetching website',
+    indeterminate: true,
+    env,
+    isTty: progressEnabled,
+    write: (data) => stderr.write(data),
   })
+  const spinner = startSpinner({
+    text: 'Fetching website…',
+    enabled: progressEnabled,
+    write: (data) => stderr.write(data),
+  })
+  const extracted = await (async () => {
+    try {
+      return await client.fetchLinkContent(url, {
+        timeoutMs,
+        youtubeTranscript: youtubeMode,
+        firecrawl: firecrawlMode,
+        format: markdownRequested ? 'markdown' : 'text',
+      })
+    } finally {
+      spinner.stop()
+      stopOscProgress()
+    }
+  })()
   writeVerbose(
     stderr,
     verbose,
