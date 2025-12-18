@@ -16,4 +16,9 @@ export type {
   ScrapeWithFirecrawl,
   TranscriptCache,
 } from './link-preview/deps.js'
-export type { TranscriptSource } from './link-preview/types.js'
+export {
+  CACHE_MODES,
+  type CacheMode,
+  type CacheStatus,
+  type TranscriptSource,
+} from './link-preview/types.js'
