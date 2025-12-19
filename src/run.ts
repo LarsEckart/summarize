@@ -2159,3 +2159,7 @@ export async function runCli(
     stopProgress()
   }
 }
+    temperature: 0,
+          temperature: 0,
+            temperature: 0,
+            temperature: 0,
