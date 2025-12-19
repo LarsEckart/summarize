@@ -1,5 +1,7 @@
 # @steipete/summarize
 
+👉 Point at it. Get the gist.
+
 Fast CLI for summarizing *anything you can point at*:
 
 - Web pages (article extraction)
@@ -12,7 +14,7 @@ It streams output by default on TTY and renders Markdown to ANSI (via `markdansi
 ## Quickstart
 
 ```bash
-npx -y @steipete/summarize "https://example.com" --model openai/gpt-5.2
+npx -y @steipete/summarize "https://example.com" --model google/gemini-3-flash-preview
 ```
 
 Input can be a URL or a local file path:
