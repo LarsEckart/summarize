@@ -132,7 +132,7 @@ function buildProgram() {
       undefined
     )
     .option('--extract-only', 'Print extracted content and exit (no LLM summary)', false)
-    .option('--json', 'Output structured JSON', false)
+    .option('--json', 'Output structured JSON (includes prompt + metrics)', false)
     .option(
       '--stream <mode>',
       'Stream LLM output: auto (TTY only), on, off. Note: streaming is disabled in --json mode.',
@@ -392,11 +392,14 @@ ${heading('Examples')}
   ${cmd('summarize "https://example.com" --extract-only --markdown llm')} ${dim('# website markdown via LLM')}
   ${cmd('summarize "https://www.youtube.com/watch?v=I845O57ZSy4&t=11s" --extract-only --youtube web')}
   ${cmd('summarize "https://example.com" --length 20k --timeout 2m --model openai/gpt-5.2')}
+  ${cmd('OPENAI_BASE_URL=https://openrouter.ai/api/v1 OPENROUTER_API_KEY=... summarize "https://example.com" --model openai/xiaomi/mimo-v2-flash:free')}
   ${cmd('summarize "https://example.com" --json --verbose')}
 
 ${heading('Env Vars')}
   XAI_API_KEY           optional (required for xai/... models)
   OPENAI_API_KEY        optional (required for openai/... models)
+  OPENAI_BASE_URL       optional (OpenAI-compatible API endpoint; e.g. OpenRouter)
+  OPENROUTER_API_KEY    optional (used when OPENAI_BASE_URL points to OpenRouter)
   GEMINI_API_KEY        optional (required for google/... models)
   ANTHROPIC_API_KEY     optional (required for anthropic/... models)
   SUMMARIZE_MODEL       optional (overrides default model selection)
@@ -435,7 +438,6 @@ async function summarizeWithModelId({
     modelId,
     apiKeys,
     prompt,
-    temperature: 0,
     maxOutputTokens,
     timeoutMs,
     fetchImpl,
@@ -684,7 +686,14 @@ export async function runCli(
   const { config, path: configPath } = loadSummarizeConfig({ env })
 
   const xaiKeyRaw = typeof env.XAI_API_KEY === 'string' ? env.XAI_API_KEY : null
-  const apiKey = typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY : null
+  const openaiBaseUrl = typeof env.OPENAI_BASE_URL === 'string' ? env.OPENAI_BASE_URL : null
+  const openRouterKeyRaw =
+    typeof env.OPENROUTER_API_KEY === 'string' ? env.OPENROUTER_API_KEY : null
+  const openaiKeyRaw = typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY : null
+  const apiKey =
+    typeof openaiBaseUrl === 'string' && /openrouter\.ai/i.test(openaiBaseUrl)
+      ? (openRouterKeyRaw ?? openaiKeyRaw)
+      : openaiKeyRaw
   const apifyToken = typeof env.APIFY_API_TOKEN === 'string' ? env.APIFY_API_TOKEN : null
   const firecrawlKey = typeof env.FIRECRAWL_API_KEY === 'string' ? env.FIRECRAWL_API_KEY : null
   const anthropicKeyRaw = typeof env.ANTHROPIC_API_KEY === 'string' ? env.ANTHROPIC_API_KEY : null
@@ -848,7 +857,7 @@ export async function runCli(
       parsedModel.provider === 'xai'
         ? 'XAI_API_KEY'
         : parsedModel.provider === 'google'
-          ? 'GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY / GOOGLE_API_KEY)'
+          ? 'GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY / GOOGLE_API_KEY)'
           : parsedModel.provider === 'anthropic'
             ? 'ANTHROPIC_API_KEY'
             : 'OPENAI_API_KEY'
@@ -918,7 +927,6 @@ export async function runCli(
           modelId: parsedModelEffective.canonical,
           apiKeys: apiKeysForLlm,
           prompt: promptPayload,
-          temperature: 0,
           maxOutputTokens: maxOutputTokensCapped,
           timeoutMs,
           fetchImpl: trackedFetch,
@@ -1320,7 +1328,7 @@ export async function runCli(
       parsedModelForLlm.provider === 'xai'
         ? 'XAI_API_KEY'
         : parsedModelForLlm.provider === 'google'
-          ? 'GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY / GOOGLE_API_KEY)'
+          ? 'GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY / GOOGLE_API_KEY)'
           : parsedModelForLlm.provider === 'anthropic'
             ? 'ANTHROPIC_API_KEY'
             : 'OPENAI_API_KEY'
@@ -1376,13 +1384,6 @@ export async function runCli(
         })
       : null
 
-  const client = createLinkPreviewClient({
-    apifyApiToken: apifyToken,
-    scrapeWithFirecrawl,
-    convertHtmlToMarkdown,
-    fetch: trackedFetch,
-  })
-
   writeVerbose(stderr, verbose, 'extract start', verboseColor)
   const stopOscProgress = startOscProgress({
     label: 'Fetching website',
@@ -1392,9 +1393,102 @@ export async function runCli(
     write: (data) => stderr.write(data),
   })
   const spinner = startSpinner({
-    text: 'Fetching website…',
+    text: 'Fetching website (connecting)…',
     enabled: progressEnabled,
     stream: stderr,
+  })
+
+  const websiteProgress = (() => {
+    if (!progressEnabled) return null
+
+    const state: {
+      phase: 'fetching' | 'firecrawl' | 'idle'
+      htmlDownloadedBytes: number
+      htmlTotalBytes: number | null
+      lastSpinnerUpdateAtMs: number
+    } = {
+      phase: 'idle',
+      htmlDownloadedBytes: 0,
+      htmlTotalBytes: null,
+      lastSpinnerUpdateAtMs: 0,
+    }
+
+    const updateSpinner = (text: string) => {
+      const now = Date.now()
+      if (now - state.lastSpinnerUpdateAtMs < 100) return
+      state.lastSpinnerUpdateAtMs = now
+      spinner.setText(text)
+    }
+
+    return {
+      getHtmlDownloadedBytes: () => state.htmlDownloadedBytes,
+      onProgress: (
+        event:
+          | { kind: 'fetch-html-start'; url: string }
+          | {
+              kind: 'fetch-html-progress'
+              url: string
+              downloadedBytes: number
+              totalBytes: number | null
+            }
+          | {
+              kind: 'fetch-html-done'
+              url: string
+              downloadedBytes: number
+              totalBytes: number | null
+            }
+          | { kind: 'firecrawl-start'; url: string; reason: string }
+          | {
+              kind: 'firecrawl-done'
+              url: string
+              ok: boolean
+              markdownBytes: number | null
+              htmlBytes: number | null
+            }
+      ) => {
+        if (event.kind === 'fetch-html-start') {
+          state.phase = 'fetching'
+          state.htmlDownloadedBytes = 0
+          state.htmlTotalBytes = null
+          updateSpinner('Fetching website (connecting)…')
+          return
+        }
+
+        if (event.kind === 'fetch-html-progress' || event.kind === 'fetch-html-done') {
+          state.phase = 'fetching'
+          state.htmlDownloadedBytes = event.downloadedBytes
+          state.htmlTotalBytes = event.totalBytes
+          const downloaded = formatBytes(event.downloadedBytes)
+          const total =
+            typeof event.totalBytes === 'number' ? `/${formatBytes(event.totalBytes)}` : ''
+          updateSpinner(`Fetching website (${downloaded}${total})…`)
+          return
+        }
+
+        if (event.kind === 'firecrawl-start') {
+          state.phase = 'firecrawl'
+          updateSpinner('Firecrawl: scraping…')
+          return
+        }
+
+        if (event.kind === 'firecrawl-done') {
+          state.phase = 'firecrawl'
+          if (event.ok && typeof event.markdownBytes === 'number') {
+            updateSpinner(`Firecrawl: got ${formatBytes(event.markdownBytes)}…`)
+            return
+          }
+          updateSpinner('Firecrawl: no content; fallback…')
+        }
+      },
+    }
+  })()
+
+  const client = createLinkPreviewClient({
+    apifyApiToken: apifyToken,
+    scrapeWithFirecrawl,
+    convertHtmlToMarkdown,
+    fetch: trackedFetch,
+    onProgress: websiteProgress?.onProgress ?? null,
   })
   let stopped = false
   const stopProgress = () => {
@@ -1411,7 +1505,16 @@ export async function runCli(
       firecrawl: firecrawlMode,
       format: markdownRequested ? 'markdown' : 'text',
     })
-    if (progressEnabled) spinner.setText('Summarizing…')
+    const extractedContentBytes = Buffer.byteLength(extracted.content, 'utf8')
+    const extractedContentSize = formatBytes(extractedContentBytes)
+    const viaFirecrawl = extracted.diagnostics.firecrawl.used ? ', Firecrawl' : ''
+    if (progressEnabled) {
+      spinner.setText(
+        extractOnly
+          ? `Extracted (${extractedContentSize})`
+          : `Summarizing (sent ${extractedContentSize}${viaFirecrawl})…`
+      )
+    }
     writeVerbose(
       stderr,
       verbose,
@@ -1554,7 +1657,7 @@ export async function runCli(
       parsedModel.provider === 'xai'
         ? 'XAI_API_KEY'
         : parsedModel.provider === 'google'
-          ? 'GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY / GOOGLE_API_KEY)'
+          ? 'GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY / GOOGLE_API_KEY)'
           : parsedModel.provider === 'anthropic'
             ? 'ANTHROPIC_API_KEY'
             : 'OPENAI_API_KEY'
@@ -1627,7 +1730,6 @@ export async function runCli(
             modelId: parsedModelEffective.canonical,
             apiKeys: apiKeysForLlm,
             prompt,
-            temperature: 0,
             maxOutputTokens: maxOutputTokensForCall,
             timeoutMs,
             fetchImpl: trackedFetch,
@@ -1834,7 +1936,6 @@ export async function runCli(
             modelId: parsedModelEffective.canonical,
             apiKeys: apiKeysForLlm,
             prompt: mergedPrompt,
-            temperature: 0,
             maxOutputTokens: maxOutputTokensForCall,
             timeoutMs,
             fetchImpl: trackedFetch,

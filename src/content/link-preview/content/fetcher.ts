@@ -1,4 +1,8 @@
-import type { FirecrawlScrapeResult, ScrapeWithFirecrawl } from '../deps.js'
+import type {
+  FirecrawlScrapeResult,
+  LinkPreviewProgressEvent,
+  ScrapeWithFirecrawl,
+} from '../deps.js'
 import { isYouTubeUrl } from '../transcript/utils.js'
 import type { CacheMode, FirecrawlDiagnostics } from '../types.js'
 
@@ -24,8 +28,13 @@ export interface FirecrawlFetchResult {
 export async function fetchHtmlDocument(
   fetchImpl: typeof fetch,
   url: string,
-  { timeoutMs }: { timeoutMs?: number } = {}
+  {
+    timeoutMs,
+    onProgress,
+  }: { timeoutMs?: number; onProgress?: ((event: LinkPreviewProgressEvent) => void) | null } = {}
 ): Promise<string> {
+  onProgress?.({ kind: 'fetch-html-start', url })
+
   const controller = new AbortController()
   const effectiveTimeoutMs =
     typeof timeoutMs === 'number' && Number.isFinite(timeoutMs)
@@ -56,7 +65,40 @@ export async function fetchHtmlDocument(
       throw new Error(`Unsupported content-type for HTML document fetch: ${contentType}`)
     }
 
-    return await response.text()
+    const totalBytes = (() => {
+      const raw = response.headers.get('content-length')
+      if (!raw) return null
+      const parsed = Number(raw)
+      return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null
+    })()
+
+    const body = response.body
+    if (!body) {
+      const text = await response.text()
+      const bytes = new TextEncoder().encode(text).byteLength
+      onProgress?.({ kind: 'fetch-html-done', url, downloadedBytes: bytes, totalBytes })
+      return text
+    }
+
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let downloadedBytes = 0
+    let text = ''
+
+    onProgress?.({ kind: 'fetch-html-progress', url, downloadedBytes: 0, totalBytes })
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (!value) continue
+      downloadedBytes += value.byteLength
+      text += decoder.decode(value, { stream: true })
+      onProgress?.({ kind: 'fetch-html-progress', url, downloadedBytes, totalBytes })
+    }
+
+    text += decoder.decode()
+    onProgress?.({ kind: 'fetch-html-done', url, downloadedBytes, totalBytes })
+    return text
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('Fetching HTML document timed out')
@@ -70,10 +112,17 @@ export async function fetchHtmlDocument(
 export async function fetchWithFirecrawl(
   url: string,
   scrapeWithFirecrawl: ScrapeWithFirecrawl | null,
-  options: { timeoutMs?: number; cacheMode?: CacheMode } = {}
+  options: {
+    timeoutMs?: number
+    cacheMode?: CacheMode
+    onProgress?: ((event: LinkPreviewProgressEvent) => void) | null
+    reason?: string | null
+  } = {}
 ): Promise<FirecrawlFetchResult> {
   const timeoutMs = options.timeoutMs
   const cacheMode: CacheMode = options.cacheMode ?? 'default'
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null
+  const reason = typeof options.reason === 'string' ? options.reason : null
   const diagnostics: FirecrawlDiagnostics = {
     attempted: false,
     used: false,
@@ -93,19 +142,30 @@ export async function fetchWithFirecrawl(
   }
 
   diagnostics.attempted = true
+  onProgress?.({ kind: 'firecrawl-start', url, reason: reason ?? 'firecrawl' })
 
   try {
     const payload = await scrapeWithFirecrawl(url, { timeoutMs, cacheMode })
     if (!payload) {
       diagnostics.notes = appendNote(diagnostics.notes, 'Firecrawl returned no content payload')
+      onProgress?.({ kind: 'firecrawl-done', url, ok: false, markdownBytes: null, htmlBytes: null })
       return { payload: null, diagnostics }
     }
+
+    const encoder = new TextEncoder()
+    const markdownBytes =
+      typeof payload.markdown === 'string' ? encoder.encode(payload.markdown).byteLength : null
+    const htmlBytes =
+      typeof payload.html === 'string' ? encoder.encode(payload.html).byteLength : null
+    onProgress?.({ kind: 'firecrawl-done', url, ok: true, markdownBytes, htmlBytes })
+
     return { payload, diagnostics }
   } catch (error) {
     diagnostics.notes = appendNote(
       diagnostics.notes,
       `Firecrawl error: ${error instanceof Error ? error.message : 'unknown error'}`
     )
+    onProgress?.({ kind: 'firecrawl-done', url, ok: false, markdownBytes: null, htmlBytes: null })
     return { payload: null, diagnostics }
   }
 }

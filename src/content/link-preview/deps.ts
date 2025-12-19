@@ -1,5 +1,28 @@
 import type { CacheMode, TranscriptSource } from './types.js'
 
+export type LinkPreviewProgressEvent =
+  | { kind: 'fetch-html-start'; url: string }
+  | {
+      kind: 'fetch-html-progress'
+      url: string
+      downloadedBytes: number
+      totalBytes: number | null
+    }
+  | {
+      kind: 'fetch-html-done'
+      url: string
+      downloadedBytes: number
+      totalBytes: number | null
+    }
+  | { kind: 'firecrawl-start'; url: string; reason: string }
+  | {
+      kind: 'firecrawl-done'
+      url: string
+      ok: boolean
+      markdownBytes: number | null
+      htmlBytes: number | null
+    }
+
 export interface FirecrawlScrapeResult {
   markdown: string
   html?: string | null
@@ -47,4 +70,5 @@ export interface LinkPreviewDeps {
   apifyApiToken: string | null
   convertHtmlToMarkdown: ConvertHtmlToMarkdown | null
   transcriptCache: TranscriptCache | null
+  onProgress?: ((event: LinkPreviewProgressEvent) => void) | null
 }

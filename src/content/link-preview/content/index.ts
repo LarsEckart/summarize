@@ -97,6 +97,8 @@ export async function fetchLinkContent(
       const attempt = await fetchWithFirecrawl(url, deps.scrapeWithFirecrawl, {
         timeoutMs,
         cacheMode,
+        onProgress: deps.onProgress ?? null,
+        reason,
       })
       firecrawlAttempted = true
       firecrawlPayload = attempt.payload
@@ -145,7 +147,10 @@ export async function fetchLinkContent(
   let htmlError: unknown = null
 
   try {
-    html = await fetchHtmlDocument(deps.fetch, url, { timeoutMs })
+    html = await fetchHtmlDocument(deps.fetch, url, {
+      timeoutMs,
+      onProgress: deps.onProgress ?? null,
+    })
   } catch (error) {
     htmlError = error
   }
