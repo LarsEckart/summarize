@@ -1,6 +1,6 @@
 import { runCliMain } from './cli-main.js'
 
-await runCliMain({
+void runCliMain({
   argv: process.argv.slice(2),
   env: process.env,
   fetch: globalThis.fetch.bind(globalThis),
@@ -10,4 +10,9 @@ await runCliMain({
   setExitCode: (code) => {
     process.exitCode = code
   },
+}).catch((error) => {
+  // Last-resort fallback; runCliMain should already format errors nicely.
+  const message = error instanceof Error ? error.message : error ? String(error) : 'Unknown error'
+  process.stderr.write(`${message}\n`)
+  process.exitCode = 1
 })

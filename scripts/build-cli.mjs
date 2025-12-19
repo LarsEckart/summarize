@@ -13,10 +13,10 @@ await mkdir(distDir, { recursive: true })
 
 await build({
   entryPoints: [path.join(repoRoot, 'src', 'cli.ts')],
-  outfile: path.join(distDir, 'cli.js'),
+  outfile: path.join(distDir, 'cli.cjs'),
   bundle: true,
   platform: 'node',
-  format: 'esm',
+  format: 'cjs',
   target: 'node22',
   sourcemap: true,
   logLevel: 'info',
