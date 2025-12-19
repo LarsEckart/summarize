@@ -126,7 +126,7 @@ function buildProgram() {
     )
     .option(
       '--model <model>',
-      'LLM model id (gateway-style): xai/..., openai/..., google/... (default: xai/grok-4-fast-non-reasoning)',
+      'LLM model id (gateway-style): xai/..., openai/..., google/... (default: google/gemini-3-flash-preview)',
       undefined
     )
     .option(
@@ -702,7 +702,7 @@ export async function runCli(
     if (typeof config?.model === 'string' && config.model.trim().length > 0) {
       return config.model.trim()
     }
-    return 'xai/grok-4-fast-non-reasoning'
+    return 'google/gemini-3-flash-preview'
   })()
 
   const model = normalizeGatewayStyleModelId((modelArg?.trim() ?? '') || resolvedDefaultModel)
