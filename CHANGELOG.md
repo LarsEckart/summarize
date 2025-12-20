@@ -1,13 +1,13 @@
 # Changelog
 
-## 0.1.3 - Unreleased
+## 0.2.0 - Unreleased
 
 ### Changes
 
 - Remove map-reduce summarization; reject inputs that exceed the model’s context window.
 - Preflight text prompts with the GPT tokenizer and the model’s max input tokens.
 - Reject text files over 10 MB before tokenization.
-- Reject very small numeric `--length` / `--max-output-tokens` values.
+- Reject too-small numeric `--length` and `--max-output-tokens` values.
 
 ## 0.1.2 - 2025-12-20
 
