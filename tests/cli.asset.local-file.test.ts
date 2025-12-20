@@ -253,6 +253,125 @@ describe('cli asset inputs (local file)', () => {
     globalFetchSpy.mockRestore()
   })
 
+  it('rejects local text files that exceed the input token limit', async () => {
+    streamTextMock.mockClear()
+
+    const root = mkdtempSync(join(tmpdir(), 'summarize-asset-local-token-limit-'))
+    const cacheDir = join(root, '.summarize', 'cache')
+    mkdirSync(cacheDir, { recursive: true })
+
+    writeFileSync(
+      join(cacheDir, 'litellm-model_prices_and_context_window.json'),
+      JSON.stringify({
+        'gpt-5.2': {
+          max_input_tokens: 10,
+          input_cost_per_token: 0.00000175,
+          output_cost_per_token: 0.000014,
+        },
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(cacheDir, 'litellm-model_prices_and_context_window.meta.json'),
+      JSON.stringify({ fetchedAtMs: Date.now() }),
+      'utf8'
+    )
+
+    const globalFetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      throw new Error('unexpected LiteLLM catalog fetch')
+    })
+
+    const txtPath = join(root, 'test.txt')
+    writeFileSync(txtPath, 'A'.repeat(2000), 'utf8')
+
+    const stdout = collectStream()
+    const stderr = collectStream()
+
+    await expect(
+      runCli(
+        [
+          '--model',
+          'openai/gpt-5.2',
+          '--timeout',
+          '2s',
+          '--stream',
+          'on',
+          '--render',
+          'plain',
+          txtPath,
+        ],
+        {
+          env: { HOME: root, OPENAI_API_KEY: 'test' },
+          fetch: vi.fn(async () => {
+            throw new Error('unexpected fetch')
+          }) as unknown as typeof fetch,
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+        }
+      )
+    ).rejects.toThrow(/Input token count/i)
+    expect(streamTextMock).toHaveBeenCalledTimes(0)
+
+    globalFetchSpy.mockRestore()
+  })
+
+  it('rejects local text files above the 10 MB limit before tokenizing', async () => {
+    streamTextMock.mockClear()
+
+    const root = mkdtempSync(join(tmpdir(), 'summarize-asset-local-size-limit-'))
+    const cacheDir = join(root, '.summarize', 'cache')
+    mkdirSync(cacheDir, { recursive: true })
+
+    writeFileSync(
+      join(cacheDir, 'litellm-model_prices_and_context_window.json'),
+      JSON.stringify({
+        'gpt-5.2': { input_cost_per_token: 0.00000175, output_cost_per_token: 0.000014 },
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(cacheDir, 'litellm-model_prices_and_context_window.meta.json'),
+      JSON.stringify({ fetchedAtMs: Date.now() }),
+      'utf8'
+    )
+
+    const globalFetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      throw new Error('unexpected LiteLLM catalog fetch')
+    })
+
+    const txtPath = join(root, 'huge.txt')
+    writeFileSync(txtPath, Buffer.alloc(10 * 1024 * 1024 + 1, 'a'))
+
+    const run = () =>
+      runCli(
+        [
+          '--model',
+          'openai/gpt-5.2',
+          '--timeout',
+          '2s',
+          '--stream',
+          'on',
+          '--render',
+          'plain',
+          txtPath,
+        ],
+        {
+          env: { HOME: root, OPENAI_API_KEY: 'test' },
+          fetch: vi.fn(async () => {
+            throw new Error('unexpected fetch')
+          }) as unknown as typeof fetch,
+          stdout: collectStream().stream,
+          stderr: collectStream().stream,
+        }
+      )
+
+    await expect(run()).rejects.toThrow(/Text file too large/i)
+    await expect(run()).rejects.toThrow(/10 MB/i)
+    expect(streamTextMock).toHaveBeenCalledTimes(0)
+
+    globalFetchSpy.mockRestore()
+  })
+
   it('errors early for zip archives with a helpful message', async () => {
     streamTextMock.mockClear()
 

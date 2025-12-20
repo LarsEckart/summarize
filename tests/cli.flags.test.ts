@@ -72,6 +72,7 @@ describe('cli flag parsing', () => {
     expect(parseLengthArg('medium')).toEqual({ kind: 'preset', preset: 'medium' })
     expect(parseLengthArg('20k')).toEqual({ kind: 'chars', maxCharacters: 20_000 })
     expect(parseLengthArg('1500')).toEqual({ kind: 'chars', maxCharacters: 1500 })
+    expect(() => parseLengthArg('1')).toThrow(/Unsupported --length/)
     expect(() => parseLengthArg('nope')).toThrow(/Unsupported --length/)
   })
 
@@ -79,6 +80,7 @@ describe('cli flag parsing', () => {
     expect(parseMaxOutputTokensArg(undefined)).toBeNull()
     expect(parseMaxOutputTokensArg('2k')).toBe(2000)
     expect(parseMaxOutputTokensArg('1500')).toBe(1500)
+    expect(() => parseMaxOutputTokensArg('1')).toThrow(/Unsupported --max-output-tokens/)
     expect(() => parseMaxOutputTokensArg('nope')).toThrow(/Unsupported --max-output-tokens/)
   })
 })

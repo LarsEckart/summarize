@@ -4,6 +4,7 @@ import {
   type LiteLlmCatalog,
   type LiteLlmLoadResult,
   loadLiteLlmCatalog as loadLiteLlmCatalogTokentally,
+  resolveLiteLlmMaxInputTokens as resolveLiteLlmMaxInputTokensTokentally,
   resolveLiteLlmMaxOutputTokens as resolveLiteLlmMaxOutputTokensTokentally,
   resolveLiteLlmPricing as resolveLiteLlmPricingTokentally,
 } from 'tokentally/node'
@@ -51,4 +52,11 @@ export function resolveLiteLlmMaxOutputTokensForModelId(
   modelId: string
 ): number | null {
   return resolveLiteLlmMaxOutputTokensTokentally(catalog, modelId)
+}
+
+export function resolveLiteLlmMaxInputTokensForModelId(
+  catalog: LiteLlmCatalog,
+  modelId: string
+): number | null {
+  return resolveLiteLlmMaxInputTokensTokentally(catalog, modelId)
 }

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   loadLiteLlmCatalog,
+  resolveLiteLlmMaxInputTokensForModelId,
   resolveLiteLlmMaxOutputTokensForModelId,
   resolveLiteLlmPricingForModelId,
 } from '../src/pricing/litellm.js'
@@ -84,6 +85,26 @@ describe('LiteLLM pricing catalog', () => {
     )
     expect(resolveLiteLlmMaxOutputTokensForModelId(catalog, 'xai/grok-4-fast-non-reasoning')).toBe(
       4096
+    )
+  })
+
+  it('resolves max input tokens for gateway-style ids', () => {
+    const catalog = {
+      'gpt-5.2': { max_input_tokens: 128_000 },
+      'claude-opus-4-5': { max_input_tokens: '200000' },
+      'gemini-3-flash-preview': { max_input_tokens: 1_000_000 },
+      'grok-4-fast-non-reasoning': { max_input_tokens: 131072 },
+    }
+
+    expect(resolveLiteLlmMaxInputTokensForModelId(catalog, 'openai/gpt-5.2')).toBe(128_000)
+    expect(resolveLiteLlmMaxInputTokensForModelId(catalog, 'anthropic/claude-opus-4-5')).toBe(
+      200000
+    )
+    expect(resolveLiteLlmMaxInputTokensForModelId(catalog, 'google/gemini-3-flash-preview')).toBe(
+      1_000_000
+    )
+    expect(resolveLiteLlmMaxInputTokensForModelId(catalog, 'xai/grok-4-fast-non-reasoning')).toBe(
+      131072
     )
   })
 

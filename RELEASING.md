@@ -40,7 +40,7 @@ Hard rule: **do not publish, tag, or create GitHub releases without explicit app
    - `git push --tags`
 
 Note: helper exists for npm-only flow: `scripts/release.sh` (phases: `gates|build|publish|smoke|tag|all`).
-Prefer running `scripts/release.sh all` so publish + smoke + tag happen in one go.
+Prefer running `scripts/release.sh all` so publish + smoke + tag happen in one go (“ship all at once”).
 
 ## Homebrew (Bun-compiled binary w/ bytecode)
 

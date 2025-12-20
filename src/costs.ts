@@ -6,7 +6,7 @@ export type LlmCall = {
   provider: LlmProvider
   model: string
   usage: LlmTokenUsage | null
-  purpose: 'summary' | 'chunk-notes' | 'markdown'
+  purpose: 'summary' | 'markdown'
 }
 
 export type RunMetricsReport = {

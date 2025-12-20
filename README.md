@@ -89,6 +89,12 @@ npx -y @steipete/summarize "https://example.com" --length 20k
 - Character targets: `1500`, `20k`, `20000`
 - Optional hard cap: `--max-output-tokens <count>` (e.g. `2000`, `2k`)
   - Provider/model APIs still enforce their own maximum output limits.
+- Minimums: `--length` numeric values must be ≥ 50 chars; `--max-output-tokens` must be ≥ 16.
+
+## Limits
+
+- Text inputs over 10 MB are rejected before tokenization.
+- Text prompts are preflighted against the model’s input limit (LiteLLM catalog), using a GPT tokenizer.
 
 ## Common flags
 
