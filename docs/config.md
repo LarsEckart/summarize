@@ -113,7 +113,6 @@ Notes:
 {
   "cli": {
     "enabled": ["claude", "gemini", "codex"],
-    "prefer": true,
     "codex": { "model": "gpt-5.2" },
     "claude": { "binary": "/usr/local/bin/claude", "extraArgs": ["--verbose"] }
   }
@@ -122,7 +121,6 @@ Notes:
 
 Notes:
 
-- `cli.prefer` defaults to `true` (auto mode prepends CLI attempts).
-- `cli.enabled` is an allowlist (omit for Gemini only).
+- `cli.enabled` is an allowlist (auto uses CLIs only when set; explicit `--cli` / `--model cli/...` must be included).
 - `cli.<provider>.binary` overrides CLI binary discovery.
 - `cli.<provider>.extraArgs` appends extra CLI args.

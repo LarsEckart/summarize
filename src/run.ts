@@ -171,6 +171,14 @@ function parseCliUserModelId(modelId: string): { provider: CliProvider; model: s
   return { provider, model: model.length > 0 ? model : null }
 }
 
+function parseCliProviderArg(raw: string): CliProvider {
+  const normalized = raw.trim().toLowerCase()
+  if (normalized === 'claude' || normalized === 'codex' || normalized === 'gemini') {
+    return normalized as CliProvider
+  }
+  throw new Error(`Unsupported --cli: ${raw}`)
+}
+
 type BirdTweetPayload = {
   id?: string
   text: string
@@ -358,6 +366,12 @@ function buildProgram() {
       '--model <model>',
       'LLM model id: auto, free, cli/<provider>/<model>, xai/..., openai/..., google/..., anthropic/... or openrouter/<author>/<slug> (default: auto)',
       undefined
+    )
+    .addOption(
+      new Option(
+        '--cli [provider]',
+        'Use a CLI provider: claude, gemini, codex (equivalent to --model cli/<provider>). If omitted, use auto selection with CLI enabled.'
+      )
     )
     .option('--extract', 'Print extracted content and exit (no LLM summary)', false)
     .addOption(new Option('--extract-only', 'Deprecated alias for --extract').hideHelp())
@@ -1012,7 +1026,18 @@ export async function runCli(
     return
   }
 
-  const rawInput = program.args[0]
+  const cliFlagPresent = normalizedArgv.some((arg) => arg === '--cli' || arg.startsWith('--cli='))
+  let cliProviderArgRaw = typeof program.opts().cli === 'string' ? program.opts().cli : null
+  let rawInput = program.args[0]
+  if (!rawInput && cliFlagPresent && cliProviderArgRaw) {
+    try {
+      resolveInputTarget(cliProviderArgRaw)
+      rawInput = cliProviderArgRaw
+      cliProviderArgRaw = null
+    } catch {
+      // keep rawInput as-is
+    }
+  }
   if (!rawInput) {
     throw new Error(
       'Usage: summarize <url-or-file> [--youtube auto|web|apify] [--length 20k] [--max-output-tokens 2k] [--timeout 2m] [--json]'
@@ -1069,6 +1094,18 @@ export async function runCli(
   const requestedFirecrawlMode = parseFirecrawlMode(program.opts().firecrawl as string)
   const modelArg =
     typeof program.opts().model === 'string' ? (program.opts().model as string) : null
+  const cliProviderArg =
+    typeof cliProviderArgRaw === 'string' && cliProviderArgRaw.trim().length > 0
+      ? parseCliProviderArg(cliProviderArgRaw)
+      : null
+  if (cliFlagPresent && modelArg) {
+    throw new Error('Use either --model or --cli (not both).')
+  }
+  const explicitModelArg = cliProviderArg
+    ? `cli/${cliProviderArg}`
+    : cliFlagPresent
+      ? 'auto'
+      : modelArg
 
   const { config, path: configPath } = loadSummarizeConfig({ env })
   const videoMode = parseVideoMode(
@@ -1076,6 +1113,19 @@ export async function runCli(
       ? (program.opts().videoMode as string)
       : (config?.media?.videoMode ?? (program.opts().videoMode as string))
   )
+
+  const cliEnabledOverride: CliProvider[] | null = (() => {
+    if (!cliFlagPresent || cliProviderArg) return null
+    if (Array.isArray(config?.cli?.enabled)) return config.cli.enabled
+    return ['claude', 'gemini', 'codex']
+  })()
+  const cliConfigForRun = cliEnabledOverride
+    ? { ...(config?.cli ?? {}), enabled: cliEnabledOverride }
+    : config?.cli
+  const configForCli: typeof config =
+    cliEnabledOverride !== null
+      ? { ...(config ?? {}), ...(cliConfigForRun ? { cli: cliConfigForRun } : {}) }
+      : config
 
   const xaiKeyRaw = typeof env.XAI_API_KEY === 'string' ? env.XAI_API_KEY : null
   const openaiBaseUrl = typeof env.OPENAI_BASE_URL === 'string' ? env.OPENAI_BASE_URL : null
@@ -1129,7 +1179,7 @@ export async function runCli(
   const anthropicConfigured = typeof anthropicApiKey === 'string' && anthropicApiKey.length > 0
   const openrouterConfigured = typeof openrouterApiKey === 'string' && openrouterApiKey.length > 0
   const openrouterOptions = openRouterProviders ? { providers: openRouterProviders } : undefined
-  const cliAvailability = resolveCliAvailability({ env, config })
+  const cliAvailability = resolveCliAvailability({ env, config: configForCli })
   const envForAuto = openrouterApiKey ? { ...env, OPENROUTER_API_KEY: openrouterApiKey } : env
 
   if (markdownModeExplicitlySet && format !== 'markdown') {
@@ -1266,7 +1316,7 @@ export async function runCli(
   })()
 
   const requestedModel: RequestedModel = parseRequestedModelId(
-    ((modelArg?.trim() ?? '') || resolvedDefaultModel).trim()
+    ((explicitModelArg?.trim() ?? '') || resolvedDefaultModel).trim()
   )
   const requestedModelLabel =
     requestedModel.kind === 'auto'
@@ -1441,6 +1491,11 @@ export async function runCli(
       if (!attempt.cliProvider) {
         throw new Error(`Missing CLI provider for model ${attempt.userModelId}.`)
       }
+      if (isCliDisabled(attempt.cliProvider, cliConfigForRun)) {
+        throw new Error(
+          `CLI provider ${attempt.cliProvider} is disabled by cli.enabled. Update your config to enable it.`
+        )
+      }
       const result = await runCliModel({
         provider: attempt.cliProvider,
         prompt: cliPrompt,
@@ -1449,7 +1504,7 @@ export async function runCli(
         timeoutMs,
         env,
         execFileImpl,
-        config: config?.cli ?? null,
+        config: cliConfigForRun ?? null,
         cwd: cli?.cwd,
         extraArgs: cli?.extraArgsByProvider?.[attempt.cliProvider],
       })
@@ -1922,7 +1977,7 @@ export async function runCli(
         : null
 
     if (
-      isFallbackModel &&
+      requestedModel.kind === 'auto' &&
       typeof desiredOutputTokens === 'number' &&
       typeof extractedTextForNoModel === 'string' &&
       extractedTextForNoModel.trim().length > 0 &&
@@ -1996,7 +2051,7 @@ export async function runCli(
           desiredOutputTokens,
           requiresVideoUnderstanding,
           env: envForAuto,
-          config,
+          config: configForCli,
           catalog,
           openrouterProvidersFromEnv: openRouterProviders,
           cliAvailability,
@@ -2130,6 +2185,10 @@ export async function runCli(
     }
 
     if (!summaryResult || !usedAttempt) {
+      if (requestedModel.kind === 'free') {
+        if (lastError instanceof Error) throw lastError
+        throw new Error('No model available for --model free')
+      }
       if (textContent) {
         clearProgressForStdout()
         stdout.write(`${textContent.content.trim()}\n`)
@@ -3143,7 +3202,7 @@ export async function runCli(
     const promptTokens = countTokens(prompt)
 
     if (
-      isFallbackModel &&
+      requestedModel.kind === 'auto' &&
       typeof desiredOutputTokens === 'number' &&
       extracted.content.trim().length > 0 &&
       countTokens(extracted.content) <= desiredOutputTokens
@@ -3215,7 +3274,7 @@ export async function runCli(
           desiredOutputTokens,
           requiresVideoUnderstanding: false,
           env: envForAuto,
-          config,
+          config: configForCli,
           catalog,
           openrouterProvidersFromEnv: openRouterProviders,
           cliAvailability,
@@ -3315,6 +3374,10 @@ export async function runCli(
     }
 
     if (!summaryResult || !usedAttempt) {
+      if (requestedModel.kind === 'free') {
+        if (lastError instanceof Error) throw lastError
+        throw new Error('No model available for --model free')
+      }
       clearProgressForStdout()
       if (json) {
         const finishReport = shouldComputeReport ? await buildReport() : null

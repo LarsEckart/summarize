@@ -275,7 +275,6 @@ describe('config loading', () => {
     const { root } = writeJsonConfig({
       cli: {
         enabled: ['claude', 'gemini'],
-        prefer: false,
         claude: {
           binary: '/opt/claude',
           model: 'sonnet',
@@ -293,7 +292,6 @@ describe('config loading', () => {
     expect(loadSummarizeConfig({ env: { HOME: root } }).config).toEqual({
       cli: {
         enabled: ['claude', 'gemini'],
-        prefer: false,
         claude: {
           binary: '/opt/claude',
           model: 'sonnet',

@@ -100,11 +100,12 @@ const DEFAULT_RULES: AutoRule[] = [
 const DEFAULT_FREE_RULES: AutoRule[] = [
   {
     candidates: [
-      'openrouter/deepseek/deepseek-r1:free',
-      'openrouter/meta-llama/llama-3.1-8b-instruct:free',
-      'openrouter/qwen/qwen2.5-72b-instruct:free',
-      'openrouter/mistralai/mistral-small-3.1:free',
-      'openrouter/google/gemma-2-9b-it:free',
+      'openrouter/google/gemini-2.0-flash-exp:free',
+      'openrouter/openai/gpt-oss-20b:free',
+      'openrouter/mistralai/mistral-small-3.1-24b-instruct:free',
+      'openrouter/meta-llama/llama-3.3-70b-instruct:free',
+      'openrouter/google/gemma-3-12b-it:free',
+      'openrouter/deepseek/deepseek-r1-0528:free',
     ],
   },
 ]
@@ -117,10 +118,8 @@ const DEFAULT_CLI_MODELS: Record<CliProvider, string> = {
 
 function isCliProviderEnabled(provider: CliProvider, config: SummarizeConfig | null): boolean {
   const cli = config?.cli
-  // Default: only consider Gemini CLI in auto mode unless the user explicitly opts in.
-  if (!cli) return provider === 'gemini'
-  if (Array.isArray(cli.enabled)) return cli.enabled.includes(provider)
-  return provider === 'gemini'
+  if (!Array.isArray(cli?.enabled) || cli.enabled.length === 0) return false
+  return cli.enabled.includes(provider)
 }
 
 function isCandidateOpenRouter(modelId: string): boolean {
@@ -268,7 +267,7 @@ function prependCliCandidates({
   config: SummarizeConfig | null
 }): string[] {
   const cli = config?.cli
-  if (cli?.prefer === false) return candidates
+  if (!Array.isArray(cli?.enabled) || cli.enabled.length === 0) return candidates
   const cliCandidates: string[] = []
   const add = (provider: CliProvider, modelOverride?: string) => {
     if (!isCliProviderEnabled(provider, config)) return
@@ -278,10 +277,7 @@ function prependCliCandidates({
     if (!cliCandidates.includes(id)) cliCandidates.push(id)
   }
 
-  const enabledOrder: CliProvider[] =
-    Array.isArray(cli?.enabled) && cli.enabled.length > 0
-      ? cli.enabled
-      : (['gemini', 'claude', 'codex'] satisfies CliProvider[])
+  const enabledOrder: CliProvider[] = cli.enabled
 
   for (const provider of enabledOrder) {
     const modelOverride =

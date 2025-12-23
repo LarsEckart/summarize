@@ -120,6 +120,7 @@ npx -y @steipete/summarize <input> [flags]
 - `--retries <count>`: LLM retry attempts on timeout (default `1`)
 - `--length short|medium|long|xl|xxl|<chars>`
 - `--max-output-tokens <count>`: hard cap for LLM output tokens (optional)
+- `--cli [provider]`: use a CLI provider (case-insensitive; equivalent to `--model cli/<provider>`). If omitted, uses auto selection with CLI enabled.
 - `--stream auto|on|off`: stream LLM output (`auto` = TTY only; disabled in `--json` mode)
 - `--render auto|md-live|md|plain`: Markdown rendering (`auto` = best default for TTY)
 - `--format md|text`: website/file content format (default `text`)
@@ -134,16 +135,23 @@ npx -y @steipete/summarize <input> [flags]
 ## Auto model ordering
 
 `--model auto` builds candidate attempts from built-in rules (or your `model.rules` overrides).
-When CLI tools are available, the default prepend order is:
+CLI tools are **not** used in auto mode unless you explicitly enable them via `cli.enabled` in config.
+Why: CLI adds ~4s latency per attempt and higher variance.
+Shortcut: `--cli` (with no provider) uses auto selection with CLI enabled.
 
-1) Gemini CLI
+When enabled, auto prepends CLI attempts in the order listed in `cli.enabled`
+(recommended order: `["claude","gemini","codex"]`), then tries the native provider candidates
+(with OpenRouter fallbacks when configured).
 
-Why only Gemini by default: performance. Claude/Codex CLI attempts added noticeable latency + variance in practice, so they’re opt-in via `cli.enabled`.
+Enable CLI attempts:
 
-Then the native provider candidates (with OpenRouter fallbacks when configured).
-If `cli.enabled` is omitted, only the Gemini CLI is enabled by default.
+```json
+{
+  "cli": { "enabled": ["claude", "gemini", "codex"] }
+}
+```
 
-Disable CLI attempts (common):
+Disable CLI attempts:
 
 ```json
 {
@@ -151,21 +159,7 @@ Disable CLI attempts (common):
 }
 ```
 
-Limit to specific CLIs:
-
-```json
-{
-  "cli": { "enabled": ["claude", "gemini"] }
-}
-```
-
-To disable only the prepend behavior (but still allow explicit `--model cli/...`), set:
-
-```json
-{
-  "cli": { "prefer": false }
-}
-```
+Note: when `cli.enabled` is set, it’s also an allowlist for explicit `--cli` / `--model cli/...`.
 
 ## Website extraction (Firecrawl + Markdown)
 

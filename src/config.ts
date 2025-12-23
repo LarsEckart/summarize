@@ -14,7 +14,6 @@ export type CliProviderConfig = {
 }
 export type CliConfig = {
   enabled?: CliProvider[]
-  prefer?: boolean
   claude?: CliProviderConfig
   codex?: CliProviderConfig
   gemini?: CliProviderConfig
@@ -427,7 +426,6 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
       typeof value.enabled !== 'undefined'
         ? parseCliProviderList(value.enabled, path, 'cli.enabled')
         : undefined
-    const prefer = typeof value.prefer === 'boolean' ? value.prefer : undefined
     const claude = value.claude ? parseCliProviderConfig(value.claude, path, 'claude') : undefined
     const codex = value.codex ? parseCliProviderConfig(value.codex, path, 'codex') : undefined
     const gemini = value.gemini ? parseCliProviderConfig(value.gemini, path, 'gemini') : undefined
@@ -444,7 +442,6 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
         : parseStringArray(value.extraArgs, path, 'cli.extraArgs')
 
     return enabled ||
-      typeof prefer === 'boolean' ||
       claude ||
       codex ||
       gemini ||
@@ -454,7 +451,6 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
       (extraArgs && extraArgs.length > 0)
       ? {
           ...(enabled ? { enabled } : {}),
-          ...(typeof prefer === 'boolean' ? { prefer } : {}),
           ...(claude ? { claude } : {}),
           ...(codex ? { codex } : {}),
           ...(gemini ? { gemini } : {}),

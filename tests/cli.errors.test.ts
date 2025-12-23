@@ -113,6 +113,17 @@ describe('cli error handling', () => {
     ).rejects.toThrow('--format md conflicts with --markdown-mode off')
   })
 
+  it('errors when --cli and --model are both set', async () => {
+    await expect(
+      runCli(['--cli', 'gemini', '--model', 'openai/gpt-5.2', 'https://example.com'], {
+        env: {},
+        fetch: vi.fn() as unknown as typeof fetch,
+        stdout: noopStream(),
+        stderr: noopStream(),
+      })
+    ).rejects.toThrow('Use either --model or --cli')
+  })
+
   it('prints extracted content when summarizing without any model API keys (default auto)', async () => {
     const html = `<!doctype html><html><head><title>Ok</title></head><body><article><p>${'A'.repeat(
       260

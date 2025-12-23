@@ -8,35 +8,37 @@ Summarize can use installed CLIs (Claude, Codex, Gemini) as local model backends
 - `cli/codex/<model>` (e.g. `cli/codex/gpt-5.2`)
 - `cli/gemini/<model>` (e.g. `cli/gemini/gemini-3-flash-preview`)
 
+Use `--cli [provider]` (case-insensitive) for the provider default, or `--model cli/<provider>/<model>` to pin a model.
+If `--cli` is provided without a provider, auto selection is used with CLI enabled.
+
 ## Auto mode
 
-When a CLI is installed, auto mode prepends CLI attempts before API models in this order:
-Gemini.
+Auto mode does **not** use CLIs unless you set `cli.enabled` in config.
 
-Why: performance. Claude/Codex CLIs were slower + higher variance in practice, so they’re opt-in via `cli.enabled`.
+Why: CLI adds ~4s latency per attempt and higher variance.
 
 Gemini CLI performance: summarize sets `GEMINI_CLI_NO_RELAUNCH=true` for Gemini CLI runs to avoid a costly self-relaunch (can be overridden by setting it yourself).
 
-Control which CLIs are considered:
+When enabled, auto prepends CLI attempts in the order listed in `cli.enabled`
+(recommended order: `["claude","gemini","codex"]`).
 
-- `cli.enabled` is an allowlist (when omitted, only `gemini` is enabled).
-- Set `cli.enabled: []` to disable all CLI attempts in auto mode.
-
-Disable globally:
+Enable CLI attempts:
 
 ```json
 {
-  "cli": { "prefer": false }
+  "cli": { "enabled": ["claude", "gemini", "codex"] }
 }
 ```
 
-Allow only specific providers:
+Disable CLI attempts:
 
 ```json
 {
-  "cli": { "enabled": ["claude"] }
+  "cli": { "enabled": [] }
 }
 ```
+
+Note: when `cli.enabled` is set, it also acts as an allowlist for explicit `--cli` / `--model cli/...`.
 
 ## CLI discovery
 
@@ -60,7 +62,6 @@ path-based prompt and enables the required tool flags:
 {
   "cli": {
     "enabled": ["claude", "gemini", "codex"],
-    "prefer": true,
     "codex": { "model": "gpt-5.2" },
     "gemini": { "model": "gemini-3-flash-preview", "extraArgs": ["--verbose"] },
     "claude": {

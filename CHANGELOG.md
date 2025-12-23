@@ -2,10 +2,16 @@
 
 ## 0.5.1 - 2025-12-23
 
+### Breaking
+
+- Remove `cli.prefer`. Auto mode only uses CLI models when `cli.enabled` is set.
+
 ### Changes
 
-- Auto mode CLI prepend order is now Claude → Gemini → Codex.
-- Add `cli.enabled` allowlist to control which CLI providers are considered.
+- Add `--cli <provider>` flag (equivalent to `--model cli/<provider>`).
+- `--cli` now accepts case-insensitive providers and can be used without a provider to enable CLI auto selection.
+- Auto mode uses CLI models only when `cli.enabled` is set; order follows the list (recommended: Claude → Gemini → Codex).
+- `cli.enabled` is an allowlist for CLI usage.
 - Remove support for `cli.disabled` and `cli.<provider>.enabled`.
 - Document CLI ordering + disable options in README and CLI/auto docs.
 

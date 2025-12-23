@@ -1,7 +1,7 @@
 # LLM / summarization mode
 
 By default `summarize` will call an LLM using **direct provider API keys**. When CLI tools are
-installed, auto mode can prefer local CLI models (see `docs/cli.md`).
+installed, auto mode can use local CLI models when `cli.enabled` is set (see `docs/cli.md`).
 
 ## Defaults
 
@@ -34,6 +34,8 @@ installed, auto mode can prefer local CLI models (see `docs/cli.md`).
     - `google/gemini-2.0-flash`
     - `anthropic/claude-sonnet-4-5`
     - `openrouter/meta-llama/llama-3.1-8b-instruct:free` (force OpenRouter)
+- `--cli [provider]`
+  - Examples: `--cli claude`, `--cli Gemini`, `--cli codex` (equivalent to `--model cli/<provider>`); `--cli` alone uses auto selection with CLI enabled.
 - `--model auto`
   - See `docs/model-auto.md`
 - `--model free` (alias: `--model 3`)
