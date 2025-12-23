@@ -1,30 +1,6 @@
 # Changelog
 
-## 0.5.1 - 2025-12-23
-
-### Breaking
-
-- Remove `cli.prefer`. Auto mode only uses CLI models when `cli.enabled` is set.
-
-### Changes
-
-- Add `--cli <provider>` flag (equivalent to `--model cli/<provider>`).
-- `--cli` now accepts case-insensitive providers and can be used without a provider to enable CLI auto selection.
-- Auto mode uses CLI models only when `cli.enabled` is set; order follows the list (recommended: Gemini → Claude → Codex).
-- `cli.enabled` is an allowlist for CLI usage.
-- Remove support for `cli.disabled` and `cli.<provider>.enabled`.
-- OpenRouter: stop sending extra routing headers.
-- Default summary length is now `xl`.
-- Document CLI ordering + disable options in README and CLI/auto docs.
-- `--model free`: when OpenRouter rejects routing with “No allowed providers”, print the exact provider names to allow.
-- `--max-output-tokens`: when explicitly set, it is also forwarded to OpenRouter calls.
-
-## 0.5.0 - 2025-12-22
-
-### Breaking
-
-- Default model is now `auto` (instead of a fixed default like `google/gemini-3-flash-preview`).
-- Config: JSON5 parsing remains, but comments (`//`, `/* */`) are rejected.
+## 0.5.0 - Unreleased
 
 ### Features
 
@@ -33,35 +9,50 @@
   - Skips candidates without API keys; retries next model on request errors.
   - Adds OpenRouter fallback attempts when `OPENROUTER_API_KEY` is present.
   - Shows the chosen model in the progress UI.
+- Add `--cli <provider>` flag (equivalent to `--model cli/<provider>`).
+- `--cli` accepts case-insensitive providers and can be used without a provider to enable CLI auto selection.
 - Free-only model selection: `--model free` (alias `--model 3`) uses OpenRouter `:free` models only.
 - Website extraction detects video-only pages:
   - YouTube embeds switch to transcript extraction automatically.
   - Direct video URLs can be downloaded + summarized when `--video-mode auto|understand` and a Gemini key is available.
 - `.env` in the current directory is loaded automatically (so API keys work without exporting env vars).
 
+### Changes
+
+- CLI config: auto mode uses CLI models only when `cli.enabled` is set; order follows the list.
+- `cli.enabled` is an allowlist for CLI usage.
+- OpenRouter: stop sending extra routing headers.
+- Default summary length is now `xl`.
+- `--model free`: when OpenRouter rejects routing with “No allowed providers”, print the exact provider names to allow.
+- `--max-output-tokens`: when explicitly set, it is also forwarded to OpenRouter calls.
+
 ### Fixes
 
 - LLM request retries (`--retries`) and clearer timeout errors.
 - Streaming output: normalize + de-dupe overlapping chunks to prevent repeated sections in live Markdown output.
 - YouTube captions: prefer manual captions over auto-generated when both exist. Thanks @dougvk.
+- Always summarize YouTube transcripts in auto mode (instead of printing the transcript).
+- Prompting: don’t “pad” beyond input length when asking for longer summaries.
+- `--metrics detailed`: fold metrics into finish line and make labels less cryptic.
 
 ### Docs
 
 - Add documentation for auto model selection and free mode.
 - Add a manual end-to-end checklist (`docs/manual-tests.md`).
 - Add a quick CLI smoke checklist (`docs/smoketest.md`).
-- Update README and releasing notes for the new defaults and flags.
+- Document CLI ordering and model selection behavior.
 
 ### Tests
 
 - Add coverage for auto/free selection, config parsing, and fallback behavior.
+- Add regression coverage for YouTube transcript handling and metrics formatting.
 
 ## 0.4.0 - 2025-12-21
 
 ### Changes
 
-- Add URL extraction mode via `--extract` (deprecated alias: `--extract-only`) with `--format md|text`.
-- Rename HTML→Markdown conversion flag to `--markdown-mode` (deprecated alias: `--markdown`).
+- Add URL extraction mode via `--extract` with `--format md|text`.
+- Rename HTML→Markdown conversion flag to `--markdown-mode`.
 - Add `--preprocess off|auto|always` and a `uvx markitdown` fallback for Markdown extraction and unsupported file attachments (when `--format md` is used).
 
 ## 0.3.0 - 2025-12-20
@@ -156,7 +147,7 @@ First public release.
   - `--max-output-tokens <count>` (optional hard cap)
   - `--timeout <duration>` (default `2m`)
   - `--stream auto|on|off`, `--render auto|md-live|md|plain`
-  - `--extract` (URLs only; no summary; deprecated alias: `--extract-only`)
+  - `--extract` (URLs only; no summary)
   - `--json` (structured output incl. input config, prompt, extracted content, LLM metadata, and metrics)
   - `--metrics off|on|detailed` (default `on`)
   - `--verbose`
