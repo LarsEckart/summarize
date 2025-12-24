@@ -22,6 +22,7 @@ async function importPodcastProvider() {
     isFfmpegAvailable: () => Promise.resolve(true),
     isWhisperCppReady: () => Promise.resolve(false),
     probeMediaDurationSecondsWithFfprobe: async () => null,
+    resolveWhisperCppModelNameForDisplay: async () => null,
     transcribeMediaWithWhisper,
     transcribeMediaFileWithWhisper,
   }))

@@ -8,6 +8,7 @@ async function importPodcastProvider() {
     isFfmpegAvailable: () => Promise.resolve(true),
     isWhisperCppReady: () => Promise.resolve(false),
     probeMediaDurationSecondsWithFfprobe: async () => null,
+    resolveWhisperCppModelNameForDisplay: async () => null,
     transcribeMediaWithWhisper: vi.fn(async () => ({
       text: 'hello from apple',
       provider: 'openai',

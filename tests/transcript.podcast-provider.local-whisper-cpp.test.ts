@@ -10,6 +10,7 @@ describe('podcast transcript provider: local whisper.cpp', () => {
       isWhisperCppReady: async () => true,
       resolveWhisperCppModelNameForDisplay: async () => 'base',
       probeMediaDurationSecondsWithFfprobe: async () => null,
+      resolveWhisperCppModelNameForDisplay: async () => 'base',
       transcribeMediaWithWhisper: async () => ({
         text: 'local transcript ok',
         provider: 'whisper.cpp',
