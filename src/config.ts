@@ -20,6 +20,12 @@ export type CliConfig = {
 
 export type OpenAiConfig = {
   useChatCompletions?: boolean
+  /**
+   * USD per minute for OpenAI Whisper transcription cost estimation.
+   *
+   * Default: 0.006 (per OpenAI pricing as of 2025-12-24).
+   */
+  whisperUsdPerMinute?: number
 }
 
 export type AutoRule = {
@@ -62,7 +68,7 @@ export type ModelConfig =
 export type SummarizeConfig = {
   model?: ModelConfig
   /**
-   * Output language for summaries (default: English).
+   * Output language for summaries (default: auto = match source content language).
    *
    * Examples: "en", "de", "english", "german", "pt-BR".
    */
@@ -564,7 +570,20 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
     }
     const useChatCompletions =
       typeof value.useChatCompletions === 'boolean' ? value.useChatCompletions : undefined
-    return typeof useChatCompletions === 'boolean' ? { useChatCompletions } : undefined
+    const whisperUsdPerMinuteRaw = (value as { whisperUsdPerMinute?: unknown }).whisperUsdPerMinute
+    const whisperUsdPerMinute =
+      typeof whisperUsdPerMinuteRaw === 'number' &&
+      Number.isFinite(whisperUsdPerMinuteRaw) &&
+      whisperUsdPerMinuteRaw > 0
+        ? whisperUsdPerMinuteRaw
+        : undefined
+
+    return typeof useChatCompletions === 'boolean' || typeof whisperUsdPerMinute === 'number'
+      ? {
+          ...(typeof useChatCompletions === 'boolean' ? { useChatCompletions } : {}),
+          ...(typeof whisperUsdPerMinute === 'number' ? { whisperUsdPerMinute } : {}),
+        }
+      : undefined
   })()
 
   return {

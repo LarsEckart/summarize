@@ -1016,6 +1016,27 @@ function formatUSD(value: number): string {
   return `$${value.toFixed(4)}`
 }
 
+function estimateWhisperTranscriptionCostUsd({
+  transcriptionProvider,
+  transcriptSource,
+  mediaDurationSeconds,
+  openaiWhisperUsdPerMinute,
+}: {
+  transcriptionProvider: string | null
+  transcriptSource: string | null
+  mediaDurationSeconds: number | null
+  openaiWhisperUsdPerMinute: number
+}): number | null {
+  if (transcriptSource !== 'whisper') return null
+  if (!transcriptionProvider || transcriptionProvider.toLowerCase() !== 'openai') return null
+  if (typeof mediaDurationSeconds !== 'number' || !Number.isFinite(mediaDurationSeconds) || mediaDurationSeconds <= 0) {
+    return null
+  }
+  const perSecond = openaiWhisperUsdPerMinute / 60
+  const cost = mediaDurationSeconds * perSecond
+  return Number.isFinite(cost) && cost > 0 ? cost : null
+}
+
 function normalizeStreamText(input: string): string {
   return input.replace(/\r\n?/g, '\n')
 }
@@ -1443,6 +1464,10 @@ export async function runCli(
       ? cliLanguageRaw
       : ((config?.language as string | undefined) ?? cliLanguageRaw)
   )
+  const openaiWhisperUsdPerMinute = (() => {
+    const value = config?.openai?.whisperUsdPerMinute
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0.006
+  })()
   const videoMode = parseVideoMode(
     videoModeExplicitlySet
       ? (program.opts().videoMode as string)
@@ -1541,6 +1566,8 @@ export async function runCli(
   const llmCalls: LlmCall[] = []
   let firecrawlRequests = 0
   let apifyRequests = 0
+  let transcriptionCostUsd: number | null = null
+  let transcriptionCostLabel: string | null = null
 
   let liteLlmCatalogPromise: ReturnType<typeof loadLiteLlmCatalog> | null = null
   const getLiteLlmCatalog = async () => {
@@ -1584,6 +1611,14 @@ export async function runCli(
   }
 
   const estimateCostUsd = async (): Promise<number | null> => {
+    const extraCosts = [
+      typeof transcriptionCostUsd === 'number' && Number.isFinite(transcriptionCostUsd)
+        ? transcriptionCostUsd
+        : null,
+    ].filter((value): value is number => typeof value === 'number')
+    const extraTotal = extraCosts.length > 0 ? extraCosts.reduce((sum, value) => sum + value, 0) : 0
+    const hasExtra = extraCosts.length > 0
+
     const explicitCosts = llmCalls
       .map((call) =>
         typeof call.costUsd === 'number' && Number.isFinite(call.costUsd) ? call.costUsd : null
@@ -1612,20 +1647,22 @@ export async function runCli(
         return { model: call.model, usage }
       })
     if (calls.length === 0) {
-      return explicitCosts.length > 0 ? explicitTotal : null
+      if (explicitCosts.length > 0 || hasExtra) return explicitTotal + extraTotal
+      return null
     }
 
     const catalog = await getLiteLlmCatalog()
     if (!catalog) {
-      return explicitCosts.length > 0 ? explicitTotal : null
+      if (explicitCosts.length > 0 || hasExtra) return explicitTotal + extraTotal
+      return null
     }
     const result = await tallyCosts({
       calls,
       resolvePricing: (modelId) => resolveLiteLlmPricingForModelId(catalog, modelId),
     })
     const catalogTotal = result.total?.totalUsd ?? null
-    if (catalogTotal === null && explicitCosts.length === 0) return null
-    return (catalogTotal ?? 0) + explicitTotal
+    if (catalogTotal === null && explicitCosts.length === 0 && !hasExtra) return null
+    return (catalogTotal ?? 0) + explicitTotal + extraTotal
   }
   const buildReport = async () => {
     return buildRunMetricsReport({ llmCalls, firecrawlRequests, apifyRequests })
@@ -3227,7 +3264,7 @@ export async function runCli(
       stderr.write(`${UVX_TIP}\n`)
     }
 
-    if (!isYoutubeUrl && extracted.isVideoOnly && extracted.video) {
+	    if (!isYoutubeUrl && extracted.isVideoOnly && extracted.video) {
       if (extracted.video.kind === 'youtube') {
         writeVerbose(
           stderr,
@@ -3282,12 +3319,23 @@ export async function runCli(
           })
           writeViaFooter([...footerBaseParts, ...(chosenModel ? [`model ${chosenModel}`] : [])])
           return
-        }
-      }
-    }
+	        }
+	      }
+	    }
 
-    const isYouTube = extracted.siteName === 'YouTube'
-    const prompt = buildLinkSummaryPrompt({
+	    // Whisper transcription cost (OpenAI only): estimate from duration (RSS hints or ffprobe) and
+	    // include it in the finish-line total.
+	    transcriptionCostUsd = estimateWhisperTranscriptionCostUsd({
+	      transcriptionProvider: extracted.transcriptionProvider,
+	      transcriptSource: extracted.transcriptSource,
+	      mediaDurationSeconds: extracted.mediaDurationSeconds,
+	      openaiWhisperUsdPerMinute,
+	    })
+	    transcriptionCostLabel =
+	      typeof transcriptionCostUsd === 'number' ? `txcost=${formatUSD(transcriptionCostUsd)}` : null
+
+	    const isYouTube = extracted.siteName === 'YouTube'
+	    const prompt = buildLinkSummaryPrompt({
       url: extracted.url,
       title: extracted.title,
       siteName: extracted.siteName,
@@ -3349,9 +3397,12 @@ export async function runCli(
             report: finishReport,
             costUsd,
             detailed: metricsDetailed,
-            extraParts: metricsDetailed
-              ? buildDetailedLengthPartsForExtracted(extracted)
-              : buildBasicLengthPartsForExtracted(extracted),
+            extraParts: [
+              ...(metricsDetailed
+                ? buildDetailedLengthPartsForExtracted(extracted)
+                : buildBasicLengthPartsForExtracted(extracted)),
+              ...(transcriptionCostLabel ? [transcriptionCostLabel] : []),
+            ],
             color: verboseColor,
           })
         }
@@ -3370,9 +3421,12 @@ export async function runCli(
           report,
           costUsd,
           detailed: metricsDetailed,
-          extraParts: metricsDetailed
-            ? buildDetailedLengthPartsForExtracted(extracted)
-            : buildBasicLengthPartsForExtracted(extracted),
+          extraParts: [
+            ...(metricsDetailed
+              ? buildDetailedLengthPartsForExtracted(extracted)
+              : buildBasicLengthPartsForExtracted(extracted)),
+            ...(transcriptionCostLabel ? [transcriptionCostLabel] : []),
+          ],
           color: verboseColor,
         })
       }
@@ -3435,9 +3489,12 @@ export async function runCli(
             report: finishReport,
             costUsd,
             detailed: metricsDetailed,
-            extraParts: metricsDetailed
-              ? buildDetailedLengthPartsForExtracted(extracted)
-              : buildBasicLengthPartsForExtracted(extracted),
+            extraParts: [
+              ...(metricsDetailed
+                ? buildDetailedLengthPartsForExtracted(extracted)
+                : buildBasicLengthPartsForExtracted(extracted)),
+              ...(transcriptionCostLabel ? [transcriptionCostLabel] : []),
+            ],
             color: verboseColor,
           })
         }
@@ -3456,9 +3513,12 @@ export async function runCli(
           report,
           costUsd,
           detailed: metricsDetailed,
-          extraParts: metricsDetailed
-            ? buildDetailedLengthPartsForExtracted(extracted)
-            : buildBasicLengthPartsForExtracted(extracted),
+          extraParts: [
+            ...(metricsDetailed
+              ? buildDetailedLengthPartsForExtracted(extracted)
+              : buildBasicLengthPartsForExtracted(extracted)),
+            ...(transcriptionCostLabel ? [transcriptionCostLabel] : []),
+          ],
           color: verboseColor,
         })
       }
@@ -3727,12 +3787,15 @@ export async function runCli(
           report: finishReport,
           costUsd,
           detailed: metricsDetailed,
-          extraParts: metricsDetailed
-            ? buildDetailedLengthPartsForExtracted(extracted)
-            : buildBasicLengthPartsForExtracted(extracted),
-          color: verboseColor,
-        })
-      }
+            extraParts: [
+              ...(metricsDetailed
+                ? buildDetailedLengthPartsForExtracted(extracted)
+                : buildBasicLengthPartsForExtracted(extracted)),
+              ...(transcriptionCostLabel ? [transcriptionCostLabel] : []),
+            ],
+            color: verboseColor,
+          })
+        }
       return
     }
 
@@ -3764,12 +3827,15 @@ export async function runCli(
         report,
         costUsd,
         detailed: metricsDetailed,
-        extraParts: metricsDetailed
-          ? buildDetailedLengthPartsForExtracted(extracted)
-          : buildBasicLengthPartsForExtracted(extracted),
-        color: verboseColor,
-      })
-    }
+          extraParts: [
+            ...(metricsDetailed
+              ? buildDetailedLengthPartsForExtracted(extracted)
+              : buildBasicLengthPartsForExtracted(extracted)),
+            ...(transcriptionCostLabel ? [transcriptionCostLabel] : []),
+          ],
+          color: verboseColor,
+        })
+      }
   } finally {
     if (clearProgressBeforeStdout === stopProgress) {
       clearProgressBeforeStdout = null
