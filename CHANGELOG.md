@@ -2,16 +2,37 @@
 
 ## 0.6.0 - Unreleased
 
-- Add `zai/...` model alias with Z.AI base URL + chat completions by default.
-- Add `OPENAI_USE_CHAT_COMPLETIONS` + `openai.useChatCompletions` config toggle.
-- Add Z.AI live test coverage.
-- Document Z.AI + chat-completions toggle in README/docs.
-- Add output language control via `--language` / `--lang` and `language` config (default: `auto`).
-- Podcast links: Apple Podcasts + RSS + Spotify episodes → Whisper transcript (full episodes; avoids preview clips when RSS enclosure exists).
-- Metrics: `--metrics on` now shows transcript length; `--metrics detailed` shows transcript duration/words + transcription source/provider; hide `calls=1`.
-- Cost: include OpenAI Whisper transcription estimate (duration-based) in the finish line total (`txcost=…`); configurable via `openai.whisperUsdPerMinute`.
-- Progress: smarter elapsed formatting (`2m 42s`), rounded transfer rates, and better phase labels (transcription no longer looks like a stuck "Fetching website").
-- Markdown: render links as OSC-8 hyperlinks in TTY output (clickable labels; no long wrapped URLs).
+### Features
+
+- **Podcasts (full episodes)**
+  - Support Apple Podcasts episode URLs via iTunes Lookup + enclosure transcription (avoids slow/blocked HTML).
+  - Support Spotify episode URLs via the embed page (`/embed/episode/...`) to avoid recaptcha; fall back to iTunes RSS when embed audio is DRM/missing.
+  - Whisper transcription works for any media URL (audio/video containers), not just YouTube.
+- **Language**
+  - Add `--language/--lang` (default: `auto`, match source language).
+  - Add config support via `output.language` (legacy `language` still supported).
+- **Progress UI**
+  - Add two-phase progress for podcasts: media download + Whisper transcription progress.
+
+### Changes
+
+- **Models**
+  - Add `zai/...` model alias with Z.AI base URL + chat completions by default.
+  - Add `OPENAI_USE_CHAT_COMPLETIONS` + `openai.useChatCompletions` config toggle.
+- **Metrics / output**
+  - `--metrics on` shows transcript length; `--metrics detailed` shows transcript duration/words + transcription source/provider; hides `calls=1`.
+  - Smarter duration formatting (`1h 13m 4s`, `44s`) and rounded transfer rates.
+  - Make Markdown links terminal-clickable by materializing URLs.
+- **Cost**
+  - Include OpenAI Whisper transcription estimate (duration-based) in the finish line total (`txcost=…`); configurable via `openai.whisperUsdPerMinute`.
+
+### Docs
+
+- Add `docs/language.md` and document language config + flag usage.
+
+### Tests
+
+- Raise global branch coverage threshold to 80% and add regression coverage for podcast/language/progress paths.
 
 ## 0.5.0 - 2025-12-24
 
