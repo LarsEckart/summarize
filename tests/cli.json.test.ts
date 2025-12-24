@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +13,8 @@ const htmlResponse = (html: string, status = 200) =>
   })
 
 describe('cli --json', () => {
+  const home = mkdtempSync(join(tmpdir(), 'summarize-tests-json-'))
+
   it('disables AI SDK warning logs (stdout must stay JSON)', async () => {
     const globalObject = globalThis as unknown as { AI_SDK_LOG_WARNINGS?: boolean }
     const previous = globalObject.AI_SDK_LOG_WARNINGS
@@ -37,7 +42,7 @@ describe('cli --json', () => {
       })
 
       await runCli(['--json', '--extract', '--timeout', '2s', 'https://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: fetchMock as unknown as typeof fetch,
         stdout,
         stderr: new Writable({
@@ -84,7 +89,7 @@ describe('cli --json', () => {
     })
 
     await runCli(['--json', '--extract', '--timeout', '2s', 'https://example.com'], {
-      env: {},
+      env: { HOME: home },
       fetch: fetchMock as unknown as typeof fetch,
       stdout,
       stderr,
@@ -134,7 +139,7 @@ describe('cli --json', () => {
     await runCli(
       ['--json', '--extract-only', '--length', 'xxl', '--timeout', '2s', 'https://example.com'],
       {
-        env: {},
+        env: { HOME: home },
         fetch: fetchMock as unknown as typeof fetch,
         stdout,
         stderr: new Writable({

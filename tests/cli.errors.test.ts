@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -13,10 +16,12 @@ const noopStream = () =>
   })
 
 describe('cli error handling', () => {
+  const home = mkdtempSync(join(tmpdir(), 'summarize-tests-errors-'))
+
   it('errors when url is missing', async () => {
     await expect(
       runCli([], {
-        env: {},
+        env: { HOME: home },
         fetch: globalThis.fetch.bind(globalThis),
         stdout: noopStream(),
         stderr: noopStream(),
@@ -27,7 +32,7 @@ describe('cli error handling', () => {
   it('errors when url is not http(s)', async () => {
     await expect(
       runCli(['ftp://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: vi.fn() as unknown as typeof fetch,
         stdout: noopStream(),
         stderr: noopStream(),
@@ -38,7 +43,7 @@ describe('cli error handling', () => {
   it('errors when --firecrawl always is set without a key', async () => {
     await expect(
       runCli(['--firecrawl', 'always', '--extract', 'https://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: vi.fn(
           async () => new Response('<html></html>', { status: 200 })
         ) as unknown as typeof fetch,
@@ -51,7 +56,7 @@ describe('cli error handling', () => {
   it('errors when --markdown llm is set without any LLM keys', async () => {
     await expect(
       runCli(['--format', 'md', '--markdown-mode', 'llm', '--extract', 'https://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: vi.fn(
           async () => new Response('<html></html>', { status: 200 })
         ) as unknown as typeof fetch,
@@ -79,7 +84,7 @@ describe('cli error handling', () => {
     await runCli(
       ['--format', 'md', '--markdown-mode', 'auto', '--extract', 'https://example.com'],
       {
-        env: {},
+        env: { HOME: home },
         fetch: fetchMock as unknown as typeof fetch,
         stdout,
         stderr: noopStream(),
@@ -92,7 +97,7 @@ describe('cli error handling', () => {
   it('errors when --markdown-mode is used without --format md', async () => {
     await expect(
       runCli(['--markdown-mode', 'auto', '--extract', 'https://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: vi.fn(
           async () => new Response('<html></html>', { status: 200 })
         ) as unknown as typeof fetch,
@@ -105,7 +110,7 @@ describe('cli error handling', () => {
   it('errors when --format md conflicts with --markdown-mode off', async () => {
     await expect(
       runCli(['--extract', '--format', 'md', '--markdown-mode', 'off', 'https://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: vi.fn() as unknown as typeof fetch,
         stdout: noopStream(),
         stderr: noopStream(),
@@ -116,7 +121,7 @@ describe('cli error handling', () => {
   it('errors when --cli and --model are both set', async () => {
     await expect(
       runCli(['--cli', 'gemini', '--model', 'openai/gpt-5.2', 'https://example.com'], {
-        env: {},
+        env: { HOME: home },
         fetch: vi.fn() as unknown as typeof fetch,
         stdout: noopStream(),
         stderr: noopStream(),
@@ -140,7 +145,7 @@ describe('cli error handling', () => {
     })
 
     await runCli(['--timeout', '2s', 'https://example.com'], {
-      env: {},
+      env: { HOME: home },
       fetch: fetchMock as unknown as typeof fetch,
       stdout,
       stderr: noopStream(),
@@ -154,7 +159,7 @@ describe('cli error handling', () => {
 
     await expect(
       runCli(['--extract-only', 'https://x.com/user/status/123'], {
-        env: { PATH: '' },
+        env: { HOME: home, PATH: '' },
         fetch: fetchMock as unknown as typeof fetch,
         stdout: noopStream(),
         stderr: noopStream(),
@@ -179,7 +184,7 @@ describe('cli error handling', () => {
 
     await expect(
       runCli(['--extract-only', tweetUrl], {
-        env: { PATH: '' },
+        env: { HOME: home, PATH: '' },
         fetch: fetchMock as unknown as typeof fetch,
         stdout: noopStream(),
         stderr: noopStream(),

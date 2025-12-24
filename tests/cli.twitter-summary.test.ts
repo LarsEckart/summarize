@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -29,6 +32,8 @@ const buildFetchMock = (html: string) =>
   })
 
 describe('cli tweet summarization bypass', () => {
+  const home = mkdtempSync(join(tmpdir(), 'summarize-tests-twitter-summary-'))
+
   it('skips LLM summary for short tweets', async () => {
     const tweet = 'Short tweet content.'
     const html = `<!doctype html><html><head><title>Tweet</title></head><body><article><p>${tweet}</p></article></body></html>`
@@ -43,7 +48,7 @@ describe('cli tweet summarization bypass', () => {
     })
 
     await runCli([tweetUrl], {
-      env: { PATH: '' },
+      env: { HOME: home, PATH: '' },
       fetch: fetchMock as unknown as typeof fetch,
       stdout,
       stderr: noopStream(),
@@ -66,7 +71,7 @@ describe('cli tweet summarization bypass', () => {
     })
 
     await runCli(['--length', '200', tweetUrl], {
-      env: { PATH: '' },
+      env: { HOME: home, PATH: '' },
       fetch: fetchMock as unknown as typeof fetch,
       stdout,
       stderr: noopStream(),
