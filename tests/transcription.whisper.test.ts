@@ -220,6 +220,44 @@ describe('transcription/whisper', () => {
     }
   })
 
+  it('transcribes small files via transcribeMediaFileWithWhisper (no chunking)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'summarize-whisper-file-small-'))
+    const audioPath = join(root, 'audio.mp3')
+    await writeFile(audioPath, new Uint8Array([1, 2, 3]))
+
+    vi.resetModules()
+    vi.stubEnv('SUMMARIZE_DISABLE_LOCAL_WHISPER_CPP', '1')
+
+    const openaiFetch = vi.fn(async () => {
+      return new Response(JSON.stringify({ text: 'from file' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    try {
+      vi.stubGlobal('fetch', openaiFetch)
+      const { transcribeMediaFileWithWhisper } = await import('../src/transcription/whisper.js')
+      const progress = vi.fn()
+      const result = await transcribeMediaFileWithWhisper({
+        filePath: audioPath,
+        mediaType: 'audio/mpeg',
+        filename: 'audio.mp3',
+        openaiApiKey: 'OPENAI',
+        falApiKey: null,
+        totalDurationSeconds: 10,
+        onProgress: progress,
+      })
+
+      expect(result.text).toBe('from file')
+      expect(result.provider).toBe('openai')
+      expect(progress).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+      await rm(root, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
   it('returns an OpenAI error when the payload has no usable text', async () => {
     const openaiFetch = vi.fn(async () => {
       return new Response(JSON.stringify({ foo: 'bar' }), {
@@ -245,6 +283,34 @@ describe('transcription/whisper', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('uses FAL chunk transcripts when the result has `chunks`', async () => {
+    vi.resetModules()
+    vi.stubEnv('SUMMARIZE_DISABLE_LOCAL_WHISPER_CPP', '1')
+
+    falMocks.createFalClient.mockReset().mockReturnValue({
+      storage: {
+        upload: vi.fn(async () => 'https://fal.example/audio'),
+      },
+      subscribe: vi.fn(async () => ({
+        data: {
+          chunks: [{ text: 'hello' }, { text: 'world' }],
+        },
+      })),
+    })
+
+    const { transcribeMediaWithWhisper } = await import('../src/transcription/whisper.js')
+    const result = await transcribeMediaWithWhisper({
+      bytes: new Uint8Array([1, 2, 3]),
+      mediaType: 'audio/mpeg',
+      filename: 'audio.mp3',
+      openaiApiKey: null,
+      falApiKey: 'FAL',
+    })
+
+    expect(result.text).toBe('hello world')
+    expect(result.provider).toBe('fal')
   })
 
   it('falls back to FAL for audio when OpenAI fails (and truncates long error details)', async () => {
@@ -532,6 +598,125 @@ describe('transcription/whisper', () => {
     expect(result.provider).toBeNull()
     expect(result.error?.message).toContain('No transcription providers available')
     expect(result.notes.join(' ')).toContain('Skipping FAL transcription')
+  })
+
+  it('surfaces ffmpeg segment failures with stderr detail', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'summarize-whisper-ffmpeg-seg-fail-'))
+    const audioPath = join(root, 'audio.bin')
+    await writeFile(audioPath, new Uint8Array([1, 2, 3]))
+    // Force the "oversized upload" branch so we hit the ffmpeg segmenter.
+    await truncate(audioPath, 30 * 1024 * 1024)
+
+    vi.resetModules()
+    vi.stubEnv('SUMMARIZE_DISABLE_LOCAL_WHISPER_CPP', '1')
+
+    vi.doMock('node:child_process', () => ({
+      spawn: (_cmd: string, args: string[]) => {
+        if (_cmd !== 'ffmpeg') throw new Error(`Unexpected spawn: ${_cmd}`)
+
+        const stderr = new EventEmitter() as EventEmitter & { setEncoding?: (encoding: string) => void }
+        stderr.setEncoding = () => {}
+
+        const handlers = new Map<string, (value?: unknown) => void>()
+        const proc = {
+          stderr,
+          on(event: string, handler: (value?: unknown) => void) {
+            handlers.set(event, handler)
+            return proc
+          },
+        } as unknown as ChildProcess
+
+        const close = (code: number) => queueMicrotask(() => handlers.get('close')?.(code))
+
+        if (args.includes('-version')) {
+          close(0)
+          return proc
+        }
+
+        // Fail the segmenter run.
+        stderr.emit('data', 'segment failed\n')
+        close(1)
+        return proc
+      },
+    }))
+
+    try {
+      const { transcribeMediaFileWithWhisper } = await import('../src/transcription/whisper.js')
+      await expect(
+        transcribeMediaFileWithWhisper({
+          filePath: audioPath,
+          mediaType: 'audio/mpeg',
+          filename: 'audio.mp3',
+          openaiApiKey: 'OPENAI',
+          falApiKey: null,
+          segmentSeconds: 1,
+          totalDurationSeconds: 2,
+        })
+      ).rejects.toThrow(/ffmpeg failed/i)
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
+  it('notes ffmpeg transcode failures when retrying OpenAI decode errors', async () => {
+    vi.resetModules()
+    vi.stubEnv('SUMMARIZE_DISABLE_LOCAL_WHISPER_CPP', '1')
+
+    const originalFetch = globalThis.fetch
+    try {
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (!url.includes('/v1/audio/transcriptions')) throw new Error(`Unexpected fetch: ${url}`)
+        return new Response('Unrecognized file format', {
+          status: 400,
+          headers: { 'content-type': 'text/plain' },
+        })
+      }) as unknown as typeof fetch
+
+      vi.doMock('node:child_process', () => ({
+        spawn: (_cmd: string, args: string[]) => {
+          if (_cmd !== 'ffmpeg') throw new Error(`Unexpected spawn: ${_cmd}`)
+          const stderr = new EventEmitter() as EventEmitter & { setEncoding?: (encoding: string) => void }
+          stderr.setEncoding = () => {}
+
+          const handlers = new Map<string, (value?: unknown) => void>()
+          const proc = {
+            stderr,
+            on(event: string, handler: (value?: unknown) => void) {
+              handlers.set(event, handler)
+              return proc
+            },
+          } as unknown as ChildProcess
+
+          const close = (code: number) => queueMicrotask(() => handlers.get('close')?.(code))
+
+          if (args.includes('-version')) {
+            close(0)
+            return proc
+          }
+
+          // Fail the transcode.
+          stderr.emit('data', 'transcode failed\n')
+          close(1)
+          return proc
+        },
+      }))
+
+      const { transcribeMediaWithWhisper } = await import('../src/transcription/whisper.js')
+      const result = await transcribeMediaWithWhisper({
+        bytes: new Uint8Array([1, 2, 3]),
+        mediaType: 'video/mp4',
+        filename: 'clip.mp4',
+        openaiApiKey: 'OPENAI',
+        falApiKey: null,
+      })
+
+      expect(result.text).toBeNull()
+      expect(result.provider).toBe('openai')
+      expect(result.notes.join(' ')).toContain('ffmpeg')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 
   it('notes when OpenAI upload is too large and ffmpeg is missing (truncates bytes)', async () => {

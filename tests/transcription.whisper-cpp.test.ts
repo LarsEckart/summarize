@@ -5,6 +5,19 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 describe('transcription/whisper local whisper.cpp', () => {
+  it('derives a compact whisper.cpp model name for display', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'summarize-whisper-cpp-model-name-'))
+    const baseEn = join(root, 'ggml-base.en.bin')
+    await writeFile(baseEn, new Uint8Array([1, 2, 3]))
+
+    vi.resetModules()
+    vi.stubEnv('SUMMARIZE_DISABLE_LOCAL_WHISPER_CPP', '0')
+    vi.stubEnv('SUMMARIZE_WHISPER_CPP_MODEL_PATH', baseEn)
+
+    const { resolveWhisperCppModelNameForDisplay } = await import('../src/transcription/whisper.js')
+    await expect(resolveWhisperCppModelNameForDisplay()).resolves.toBe('base')
+  })
+
   it('prefers whisper.cpp when enabled and available (no API keys required)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'summarize-whisper-cpp-'))
     const modelPath = join(root, 'ggml-base.bin')
@@ -64,6 +77,69 @@ describe('transcription/whisper local whisper.cpp', () => {
     expect(result.error).toBeNull()
   })
 
+  it.each([
+    { mediaType: 'audio/mpeg' },
+    { mediaType: 'audio/mp3' },
+    { mediaType: 'audio/ogg' },
+    { mediaType: 'audio/oga' },
+    { mediaType: 'application/ogg' },
+    { mediaType: 'audio/flac' },
+    { mediaType: 'audio/wav' },
+    { mediaType: 'audio/x-wav' },
+  ])('treats $mediaType as whisper.cpp-supported input', async ({ mediaType }) => {
+    const root = await mkdtemp(join(tmpdir(), 'summarize-whisper-cpp-supported-'))
+    const modelPath = join(root, 'ggml-base.bin')
+    await writeFile(modelPath, new Uint8Array([1, 2, 3]))
+
+    vi.resetModules()
+    vi.stubEnv('SUMMARIZE_DISABLE_LOCAL_WHISPER_CPP', '0')
+    vi.stubEnv('SUMMARIZE_WHISPER_CPP_MODEL_PATH', modelPath)
+    vi.stubEnv('SUMMARIZE_WHISPER_CPP_BINARY', 'whisper-cli')
+
+    vi.doMock('node:child_process', () => ({
+      spawn: (_cmd: string, args: string[]) => {
+        if (_cmd !== 'whisper-cli') throw new Error(`Unexpected spawn: ${_cmd}`)
+
+        const stderr = new EventEmitter() as EventEmitter & { setEncoding?: (encoding: string) => void }
+        stderr.setEncoding = () => {}
+
+        const handlers = new Map<string, (value?: unknown) => void>()
+        const proc = {
+          stderr,
+          on(event: string, handler: (value?: unknown) => void) {
+            handlers.set(event, handler)
+            return proc
+          },
+        } as unknown
+
+        if (args.includes('--help')) {
+          queueMicrotask(() => handlers.get('close')?.(0))
+          return proc
+        }
+
+        const outIdx = args.indexOf('--output-file')
+        const base = outIdx >= 0 ? args[outIdx + 1] : null
+        if (!base || typeof base !== 'string') throw new Error('missing --output-file arg')
+        void writeFile(`${base}.txt`, `ok ${mediaType}\n`)
+          .then(() => queueMicrotask(() => handlers.get('close')?.(0)))
+          .catch((error) => queueMicrotask(() => handlers.get('error')?.(error)))
+        return proc
+      },
+    }))
+
+    const { transcribeMediaWithWhisper } = await import('../src/transcription/whisper.js')
+    const result = await transcribeMediaWithWhisper({
+      bytes: new Uint8Array([1, 2, 3]),
+      mediaType,
+      filename: 'audio',
+      openaiApiKey: null,
+      falApiKey: null,
+    })
+
+    expect(result.provider).toBe('whisper.cpp')
+    expect(result.text).toContain(`ok ${mediaType}`)
+  })
+
   it('transcribes via transcribeMediaFileWithWhisper with whisper.cpp when enabled', async () => {
     const root = await mkdtemp(join(tmpdir(), 'summarize-whisper-cpp-file-'))
     const modelPath = join(root, 'ggml-base.bin')
@@ -103,7 +179,11 @@ describe('transcription/whisper local whisper.cpp', () => {
         const base = outIdx >= 0 ? args[outIdx + 1] : null
         if (!base || typeof base !== 'string') throw new Error('missing --output-file arg')
         void writeFile(`${base}.txt`, 'file mode ok\n')
-          .then(() => queueMicrotask(() => handlers.get('close')?.(0)))
+          .then(() => {
+            // Progress output from `whisper-cli --print-progress` arrives on stderr.
+            stderr.emit('data', 'whisper_print_progress_callback: progress = 50%\\n')
+            queueMicrotask(() => handlers.get('close')?.(0))
+          })
           .catch((error) => queueMicrotask(() => handlers.get('error')?.(error)))
         return proc
       },
@@ -124,6 +204,12 @@ describe('transcription/whisper local whisper.cpp', () => {
     expect(result.text).toBe('file mode ok')
     expect(result.provider).toBe('whisper.cpp')
     expect(progress).toHaveBeenCalled()
+    expect(
+      progress.mock.calls.some(([evt]) => {
+        const event = evt as { processedDurationSeconds: number | null }
+        return typeof event.processedDurationSeconds === 'number' && event.processedDurationSeconds > 0
+      })
+    ).toBe(true)
   })
 
   it('falls back to OpenAI when whisper.cpp fails', async () => {
