@@ -459,7 +459,7 @@ function buildProgram() {
     .addOption(
       new Option(
         '--markdown-mode <mode>',
-        'HTML→Markdown conversion: off, auto (prefer Firecrawl when configured, then LLM when configured, then markitdown when available), llm (force LLM). Only affects --format md for non-YouTube URLs.'
+        'HTML→Markdown conversion: off, auto (prefer Firecrawl when configured, then LLM when configured, then markitdown when available), llm (force LLM), readability (use Readability article HTML as input). Only affects --format md for non-YouTube URLs.'
       ).default('auto')
     )
     .addOption(
@@ -3364,6 +3364,7 @@ export async function runCli(
         youtubeTranscript: youtubeMode,
         firecrawl: firecrawlMode,
         format: markdownRequested ? 'markdown' : 'text',
+        markdownMode: markdownRequested ? effectiveMarkdownMode : undefined,
       })
     } catch (error) {
       throw withBirdTip(error, url, env)
@@ -3492,6 +3493,7 @@ export async function runCli(
           youtubeTranscript: youtubeMode,
           firecrawl: firecrawlMode,
           format: markdownRequested ? 'markdown' : 'text',
+          markdownMode: markdownRequested ? effectiveMarkdownMode : undefined,
         })
         recomputeExtractionUi()
         if (progressEnabled) {

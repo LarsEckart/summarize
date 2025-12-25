@@ -10,7 +10,7 @@ import {
 import { normalizeForPrompt } from './cleaner.js'
 import { fetchHtmlDocument, fetchWithFirecrawl } from './fetcher.js'
 import { extractMetadataFromFirecrawl, extractMetadataFromHtml } from './parsers.js'
-import type { ExtractedLinkContent, FetchLinkContentOptions } from './types.js'
+import type { ExtractedLinkContent, FetchLinkContentOptions, MarkdownMode } from './types.js'
 import {
   appendNote,
   ensureTranscriptDiagnostics,
@@ -25,6 +25,7 @@ import {
 } from './utils.js'
 import { detectPrimaryVideoFromHtml } from './video.js'
 import { extractYouTubeShortDescription } from './youtube.js'
+import { extractReadabilityFromHtml, toReadabilityHtml } from './readability.js'
 
 const LEADING_CONTROL_PATTERN = /^[\\s\\p{Cc}]+/u
 const BLOCKED_HTML_HINT_PATTERN =
@@ -32,6 +33,8 @@ const BLOCKED_HTML_HINT_PATTERN =
 const TWITTER_BLOCKED_TEXT_PATTERN =
   /something went wrong|try again|privacy related extensions|please disable them and try again/i
 const MIN_HTML_CONTENT_CHARACTERS = 200
+const MIN_READABILITY_CONTENT_CHARACTERS = 200
+const READABILITY_RELATIVE_THRESHOLD = 0.6
 const MIN_HTML_DOCUMENT_CHARACTERS_FOR_FALLBACK = 5000
 const TWITTER_HOSTS = new Set(['x.com', 'twitter.com', 'mobile.twitter.com'])
 const NITTER_HOST = 'nitter.net'
@@ -139,6 +142,7 @@ export async function fetchLinkContent(
   const youtubeTranscriptMode = options?.youtubeTranscript ?? 'auto'
   const firecrawlMode = resolveFirecrawlMode(options)
   const markdownRequested = (options?.format ?? 'text') === 'markdown'
+  const markdownMode: MarkdownMode = options?.markdownMode ?? 'auto'
 
   const canUseFirecrawl =
     firecrawlMode !== 'off' && deps.scrapeWithFirecrawl !== null && !isYouTubeUrl(url)
@@ -414,8 +418,10 @@ export async function fetchLinkContent(
       youtubeTranscriptMode,
       firecrawlDiagnostics,
       markdownRequested,
+      markdownMode,
       timeoutMs,
       deps,
+      readabilityCandidate: null,
     })
     if (!isBlockedTwitterContent(nitterResult.content)) {
       nitterResult.diagnostics.strategy = 'nitter'
@@ -463,12 +469,18 @@ export async function fetchLinkContent(
     )
   }
 
+  let readabilityCandidate: Awaited<ReturnType<typeof extractReadabilityFromHtml>> | null = null
+
   if (firecrawlMode === 'auto' && shouldFallbackToFirecrawl(html)) {
-    const firecrawlResult = await attemptFirecrawl(
-      'HTML content looked blocked/thin; falling back to Firecrawl'
-    )
-    if (firecrawlResult) {
-      return firecrawlResult
+    readabilityCandidate = await extractReadabilityFromHtml(html, url)
+    const readabilityText = readabilityCandidate?.text ? normalizeForPrompt(readabilityCandidate.text) : ''
+    if (readabilityText.length < MIN_READABILITY_CONTENT_CHARACTERS) {
+      const firecrawlResult = await attemptFirecrawl(
+        'HTML content looked blocked/thin; falling back to Firecrawl'
+      )
+      if (firecrawlResult) {
+        return firecrawlResult
+      }
     }
   }
 
@@ -480,8 +492,10 @@ export async function fetchLinkContent(
     youtubeTranscriptMode,
     firecrawlDiagnostics,
     markdownRequested,
+    markdownMode,
     timeoutMs,
     deps,
+    readabilityCandidate,
   })
   if (twitterStatus && isBlockedTwitterContent(htmlResult.content)) {
     const birdNote = !deps.readTweetWithBird
@@ -593,8 +607,10 @@ async function buildResultFromHtmlDocument({
   youtubeTranscriptMode,
   firecrawlDiagnostics,
   markdownRequested,
+  markdownMode,
   timeoutMs,
   deps,
+  readabilityCandidate,
 }: {
   url: string
   html: string
@@ -603,8 +619,10 @@ async function buildResultFromHtmlDocument({
   youtubeTranscriptMode: FetchLinkContentOptions['youtubeTranscript']
   firecrawlDiagnostics: FirecrawlDiagnostics
   markdownRequested: boolean
+  markdownMode: MarkdownMode
   timeoutMs: number
   deps: LinkPreviewDeps
+  readabilityCandidate: Awaited<ReturnType<typeof extractReadabilityFromHtml>> | null
 }): Promise<ExtractedLinkContent> {
   if (isYouTubeVideoUrl(url) && !extractYouTubeVideoId(url)) {
     throw new Error('Invalid YouTube video id in URL')
@@ -613,6 +631,15 @@ async function buildResultFromHtmlDocument({
   const { title, description, siteName } = extractMetadataFromHtml(html, url)
   const rawContent = extractArticleContent(html)
   const normalized = normalizeForPrompt(rawContent)
+
+  const readability = readabilityCandidate ?? (await extractReadabilityFromHtml(html, url))
+  const readabilityText = readability?.text ? normalizeForPrompt(readability.text) : ''
+  const readabilityHtml = toReadabilityHtml(readability)
+  const preferReadability =
+    readabilityText.length >= MIN_READABILITY_CONTENT_CHARACTERS &&
+    (normalized.length < MIN_HTML_CONTENT_CHARACTERS ||
+      readabilityText.length >= normalized.length * READABILITY_RELATIVE_THRESHOLD)
+  const effectiveNormalized = preferReadability ? readabilityText : normalized
   const transcriptResolution = await resolveTranscriptForLink(url, html, deps, {
     youtubeTranscriptMode,
     cacheMode,
@@ -620,7 +647,7 @@ async function buildResultFromHtmlDocument({
 
   const youtubeDescription =
     transcriptResolution.text === null ? extractYouTubeShortDescription(html) : null
-  const baseCandidate = youtubeDescription ? normalizeForPrompt(youtubeDescription) : normalized
+  const baseCandidate = youtubeDescription ? normalizeForPrompt(youtubeDescription) : effectiveNormalized
 
   let baseContent = selectBaseContent(baseCandidate, transcriptResolution.text)
   if (baseContent === normalized) {
@@ -656,7 +683,9 @@ async function buildResultFromHtmlDocument({
     }
 
     try {
-      const sanitizedHtml = sanitizeHtmlForMarkdownConversion(html)
+      const htmlForMarkdown =
+        markdownMode === 'readability' && readabilityHtml ? readabilityHtml : html
+      const sanitizedHtml = sanitizeHtmlForMarkdownConversion(htmlForMarkdown)
       const markdown = await deps.convertHtmlToMarkdown({
         url,
         html: sanitizedHtml,
@@ -675,7 +704,15 @@ async function buildResultFromHtmlDocument({
       }
 
       baseContent = normalizedMarkdown
-      return { requested: true, used: true, provider: 'llm', notes: null }
+      return {
+        requested: true,
+        used: true,
+        provider: 'llm',
+        notes:
+          markdownMode === 'readability' && readabilityHtml
+            ? 'Readability HTML used for markdown input'
+            : null,
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return {

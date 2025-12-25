@@ -151,6 +151,7 @@ Use `summarize --help` or `summarize help` for the full help text.
 - `--render auto|md-live|md|plain`: Markdown rendering (`auto` = best default for TTY)
 - `--no-color`: disable ANSI colors
 - `--format md|text`: website/file content format (default `text`)
+- `--markdown-mode auto|llm|readability|off`: HTML→Markdown conversion mode (`readability` uses Readability article HTML as input)
 - `--preprocess off|auto|always`: controls `uvx markitdown` usage (default `auto`; `always` forces file preprocessing)
   - Install `uvx`: `brew install uv` (or https://astral.sh/uv/)
 - `--extract`: print extracted content and exit (no summary) — only for URLs
@@ -213,7 +214,7 @@ Non-YouTube URLs go through a “fetch → extract” pipeline. When the direct 
 
 - `--firecrawl off|auto|always` (default `auto`)
 - `--extract --format md|text` (default `text`)
-- `--markdown-mode off|auto|llm` (default `auto`; only affects `--format md` for non-YouTube URLs)
+- `--markdown-mode off|auto|llm|readability` (default `auto`; only affects `--format md` for non-YouTube URLs)
   - `auto`: use an LLM converter when configured; may fall back to `uvx markitdown`
   - `llm`: force LLM conversion (requires a configured model key)
   - `off`: disable LLM conversion (still may return Firecrawl Markdown when configured)

@@ -9,7 +9,7 @@ Use this for non-YouTube URLs.
 - If extraction looks blocked or too thin, it can retry via Firecrawl (Markdown).
 - If a page is effectively “video-only”, it may treat it as a video input (see `--video-mode`).
 - With `--format md`, the CLI prefers Firecrawl Markdown by default when `FIRECRAWL_API_KEY` is configured.
-- With `--format md`, `--markdown-mode auto|llm` can also convert HTML → Markdown via an LLM using the configured `--model` (no provider fallback).
+- With `--format md`, `--markdown-mode auto|llm|readability` can also convert HTML → Markdown via an LLM using the configured `--model` (no provider fallback).
 - With `--format md`, `--markdown-mode auto` may fall back to `uvx markitdown` when available (disable with `--preprocess off`).
 - For podcast URLs (Apple Podcasts, RSS, Spotify episodes), it downloads the episode audio and transcribes via Whisper (prefers local `whisper.cpp` when installed + model available); progress shows “Downloading audio …” then “Transcribing …” (duration uses RSS hints or `ffprobe` when available).
 
@@ -18,7 +18,7 @@ Use this for non-YouTube URLs.
 - `--firecrawl off|auto|always`
 - `--format md|text` (default: `text`)
 - `--language, --lang <language>` (default: `auto`; match source language)
-- `--markdown-mode off|auto|llm` (default: `auto`; only affects `--format md` for non-YouTube URLs)
+- `--markdown-mode off|auto|llm|readability|readability` (default: `auto`; only affects `--format md` for non-YouTube URLs)
 - `--preprocess off|auto|always` (default: `auto`; controls markitdown usage; `always` only affects file inputs)
 - `--video-mode auto|transcript|understand` (only affects video inputs / video-only pages)
 - Plain-text mode: use `--format text`.

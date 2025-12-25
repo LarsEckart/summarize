@@ -11,6 +11,9 @@ importers:
       '@fal-ai/client':
         specifier: ^1.2.1
         version: 1.8.1
+      '@mozilla/readability':
+        specifier: 0.6.0
+        version: 0.6.0
       cheerio:
         specifier: ^1.1.2
         version: 1.1.2
@@ -20,6 +23,9 @@ importers:
       gpt-tokenizer:
         specifier: ^3.4.0
         version: 3.4.0
+      jsdom:
+        specifier: 27.3.0
+        version: 27.3.0
       json5:
         specifier: ^2.2.3
         version: 2.2.3
@@ -42,9 +48,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.3.10
         version: 2.3.10
-      '@mozilla/readability':
-        specifier: ^0.6.0
-        version: 0.6.0
+      '@types/jsdom':
+        specifier: ^27.0.0
+        version: 27.0.0
       '@types/node':
         specifier: ^25.0.3
         version: 25.0.3
@@ -66,9 +72,6 @@ importers:
       file-type:
         specifier: ^21.1.1
         version: 21.1.1
-      jsdom:
-        specifier: ^27.3.0
-        version: 27.3.0
       markdansi:
         specifier: 0.1.7
         version: 0.1.7
@@ -79,8 +82,8 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       osc-progress:
-        specifier: github:steipete/osc-progress#v0.1.1
-        version: https://codeload.github.com/steipete/osc-progress/tar.gz/6c6fc18e2575a31c43d5abadae670ac3ab3337bd
+        specifier: github:steipete/osc-progress#v0.2.0
+        version: https://codeload.github.com/steipete/osc-progress/tar.gz/44bd742691cda9a11c08bcd27ec69aaf4576e850
       oxlint:
         specifier: ^1.35.0
         version: 1.35.0(oxlint-tsgolint@0.10.0)
@@ -653,6 +656,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  '@types/jsdom@27.0.0':
+    resolution: {integrity: sha512-NZyFl/PViwKzdEkQg96gtnB8wm+1ljhdDay9ahn4hgb+SfVtPCbm3TlmDUFXTA+MGN3CijicnMhG18SI5H3rFw==}
+
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
 
@@ -664,6 +670,9 @@ packages:
 
   '@types/sanitize-html@2.16.0':
     resolution: {integrity: sha512-l6rX1MUXje5ztPT0cAFtUayXF06DqPhRyfVXareEN5gGCFaP/iwsxIyKODr9XDhfxPpN6vXUFNfo5kZMXCxBtw==}
+
+  '@types/tough-cookie@4.0.5':
+    resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
@@ -1168,9 +1177,9 @@ packages:
     resolution: {integrity: sha512-m0pg2zscbYgWbqRR6ABga5c3sZdEon7bSgjnlXC64kxtxLOyjRcbbUkLj7HFyy/FTD+P2xdBWu8snGhYI0jc4A==}
     engines: {node: '>=20'}
 
-  osc-progress@https://codeload.github.com/steipete/osc-progress/tar.gz/6c6fc18e2575a31c43d5abadae670ac3ab3337bd:
-    resolution: {tarball: https://codeload.github.com/steipete/osc-progress/tar.gz/6c6fc18e2575a31c43d5abadae670ac3ab3337bd}
-    version: 0.1.1
+  osc-progress@https://codeload.github.com/steipete/osc-progress/tar.gz/44bd742691cda9a11c08bcd27ec69aaf4576e850:
+    resolution: {tarball: https://codeload.github.com/steipete/osc-progress/tar.gz/44bd742691cda9a11c08bcd27ec69aaf4576e850}
+    version: 0.2.0
     engines: {node: '>=20'}
 
   oxlint-tsgolint@0.10.0:
@@ -1878,6 +1887,12 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/jsdom@27.0.0':
+    dependencies:
+      '@types/node': 25.0.3
+      '@types/tough-cookie': 4.0.5
+      parse5: 7.3.0
+
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -1891,6 +1906,8 @@ snapshots:
   '@types/sanitize-html@2.16.0':
     dependencies:
       htmlparser2: 8.0.2
+
+  '@types/tough-cookie@4.0.5': {}
 
   '@types/unist@3.0.3': {}
 
@@ -2629,7 +2646,7 @@ snapshots:
       string-width: 8.1.0
       strip-ansi: 7.1.2
 
-  osc-progress@https://codeload.github.com/steipete/osc-progress/tar.gz/6c6fc18e2575a31c43d5abadae670ac3ab3337bd: {}
+  osc-progress@https://codeload.github.com/steipete/osc-progress/tar.gz/44bd742691cda9a11c08bcd27ec69aaf4576e850: {}
 
   oxlint-tsgolint@0.10.0:
     optionalDependencies:

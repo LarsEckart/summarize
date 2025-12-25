@@ -11,6 +11,7 @@ export const DEFAULT_CACHE_MODE: CacheMode = 'default'
 export type YoutubeTranscriptMode = 'auto' | 'web' | 'apify' | 'yt-dlp'
 export type FirecrawlMode = 'off' | 'auto' | 'always'
 export type ContentFormat = 'text' | 'markdown'
+export type MarkdownMode = 'off' | 'auto' | 'llm' | 'readability'
 
 export interface FetchLinkContentOptions {
   timeoutMs?: number
@@ -19,6 +20,7 @@ export interface FetchLinkContentOptions {
   youtubeTranscript?: YoutubeTranscriptMode
   firecrawl?: FirecrawlMode
   format?: ContentFormat
+  markdownMode?: MarkdownMode
 }
 
 export interface TranscriptResolution {

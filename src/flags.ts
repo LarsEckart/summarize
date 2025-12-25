@@ -2,7 +2,7 @@ import type { SummaryLength } from './shared/contracts.js'
 
 export type YoutubeMode = 'auto' | 'web' | 'apify' | 'yt-dlp'
 export type FirecrawlMode = 'off' | 'auto' | 'always'
-export type MarkdownMode = 'off' | 'auto' | 'llm'
+export type MarkdownMode = 'off' | 'auto' | 'llm' | 'readability'
 export type ExtractFormat = 'text' | 'markdown'
 export type PreprocessMode = 'off' | 'auto' | 'always'
 export type StreamMode = 'auto' | 'on' | 'off'
@@ -38,7 +38,7 @@ export function parseFirecrawlMode(raw: string): FirecrawlMode {
 
 export function parseMarkdownMode(raw: string): MarkdownMode {
   const normalized = raw.trim().toLowerCase()
-  if (normalized === 'off' || normalized === 'auto' || normalized === 'llm') return normalized
+  if (normalized === 'off' || normalized === 'auto' || normalized === 'llm' || normalized === 'readability') return normalized
   throw new Error(`Unsupported --markdown-mode: ${raw}`)
 }
 

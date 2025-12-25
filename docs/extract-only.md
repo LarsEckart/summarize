@@ -14,3 +14,4 @@ Deprecated alias: `--extract-only`.
 - For non-YouTube URLs with `--format md`, `--markdown-mode auto` can convert HTML → Markdown via an LLM when configured.
   - Force it with `--markdown-mode llm`.
   - If no LLM is configured, `--markdown-mode auto` may fall back to `uvx markitdown` when available.
+- `--markdown-mode readability` uses Readability to extract article HTML before Markdown conversion.

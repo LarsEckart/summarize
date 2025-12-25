@@ -39,7 +39,7 @@ export function isYouTubeVideoUrl(rawUrl: string): boolean {
   return false
 }
 
-export function extractYouTubeVideoId(rawUrl: string): Promise<string | null> {
+export function extractYouTubeVideoId(rawUrl: string): string | null {
   try {
     const url = new URL(rawUrl)
     const hostname = url.hostname.toLowerCase()
@@ -173,7 +173,7 @@ export function extractYoutubeBootstrapConfig(html: string): Record<string, unkn
 const YTCFG_SET_TOKEN = 'ytcfg.set'
 const YTCFG_VAR_TOKEN = 'var ytcfg'
 
-function extractBalancedJsonObject(source: string, startAt: number): Promise<string | null> {
+function extractBalancedJsonObject(source: string, startAt: number): string | null {
   const start = source.indexOf('{', startAt)
   if (start < 0) {
     return null
