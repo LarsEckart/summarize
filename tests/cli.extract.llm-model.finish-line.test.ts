@@ -70,7 +70,7 @@ describe('cli --extract finish line includes model when LLM ran', () => {
     const stderr = collectStream()
 
     await runCli(
-      ['--extract', '--markdown-mode', 'llm', '--timeout', '2s', 'https://example.com'],
+      ['--extract', '--markdown-mode', 'llm', '--render', 'plain', '--timeout', '2s', 'https://example.com'],
       {
         env: { HOME: root, OPENAI_API_KEY: 'test' },
         fetch: fetchMock as unknown as typeof fetch,
@@ -87,4 +87,3 @@ describe('cli --extract finish line includes model when LLM ran', () => {
     globalFetchSpy.mockRestore()
   })
 })
-

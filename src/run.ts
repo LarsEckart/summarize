@@ -3723,7 +3723,22 @@ export async function runCli(
         return
       }
 
-      stdout.write(`${extracted.content}\n`)
+      const renderedExtract =
+        format === 'markdown' &&
+        (effectiveRenderMode === 'md' || effectiveRenderMode === 'md-live') &&
+        isRichTty(stdout)
+          ? renderMarkdownAnsi(prepareMarkdownForTerminal(extracted.content), {
+              width: markdownRenderWidth(stdout, env),
+              wrap: true,
+              color: supportsColor(stdout, envForRun),
+              hyperlinks: true,
+            })
+          : extracted.content
+
+      stdout.write(renderedExtract)
+      if (!renderedExtract.endsWith('\n')) {
+        stdout.write('\n')
+      }
       writeViaFooter(footerBaseParts)
       const report = shouldComputeReport ? await buildReport() : null
       if (metricsEnabled && report) {
