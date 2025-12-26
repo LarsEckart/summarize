@@ -398,7 +398,8 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
           color: supportsColor(deps.stdout, deps.envForRun),
           hyperlinks: true,
         })
-        return rendered.endsWith('\n') ? rendered : `${rendered}\n`
+        const normalized = rendered.replace(/^\n+/, '')
+        return normalized.endsWith('\n') ? normalized : `${normalized}\n`
       }
 
       const flushRenderedLines = (markdown: string, { final }: { final: boolean }) => {

@@ -120,4 +120,78 @@ describe('cli streamed markdown rendering', () => {
 
     globalFetchSpy.mockRestore()
   })
+
+  it('does not add an extra blank line before headings', async () => {
+    streamTextMock.mockImplementationOnce(() => {
+      return {
+        textStream: createTextStream(['A\n\n## B\n']),
+        totalUsage: Promise.resolve({
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+        }),
+      }
+    })
+
+    const root = mkdtempSync(join(tmpdir(), 'summarize-md-live-'))
+    const cacheDir = join(root, '.summarize', 'cache')
+    mkdirSync(cacheDir, { recursive: true })
+
+    writeFileSync(
+      join(cacheDir, 'litellm-model_prices_and_context_window.json'),
+      JSON.stringify({
+        'gpt-5.2': { input_cost_per_token: 0.00000175, output_cost_per_token: 0.000014 },
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(cacheDir, 'litellm-model_prices_and_context_window.meta.json'),
+      JSON.stringify({ fetchedAtMs: Date.now() }),
+      'utf8'
+    )
+
+    const globalFetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      throw new Error('unexpected LiteLLM catalog fetch')
+    })
+
+    const html =
+      '<!doctype html><html><head><title>Hello</title></head>' +
+      '<body><article><p>Hi</p></article></body></html>'
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === 'https://example.com') return htmlResponse(html)
+      throw new Error(`Unexpected fetch call: ${url}`)
+    })
+
+    const stdout = collectStream()
+    ;(stdout.stream as unknown as { isTTY?: boolean; columns?: number }).isTTY = true
+    ;(stdout.stream as unknown as { columns?: number }).columns = 80
+    const stderr = collectStream()
+
+    await runCli(
+      [
+        '--model',
+        'openai/gpt-5.2',
+        '--timeout',
+        '2s',
+        '--stream',
+        'auto',
+        '--no-color',
+        'https://example.com',
+      ],
+      {
+        env: { HOME: root, OPENAI_API_KEY: 'test', TERM: 'xterm-256color' },
+        fetch: fetchMock as unknown as typeof fetch,
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+      }
+    )
+
+    const out = stdout.getText()
+    expect(out).toContain('A\n\nB\n')
+    expect(out).not.toContain('A\n\n\nB\n')
+
+    globalFetchSpy.mockRestore()
+  })
 })
