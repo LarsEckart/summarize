@@ -72,9 +72,20 @@ export function extractYouTubeVideoId(rawUrl: string): string | null {
 
 async function extractReadabilityText(html: string): Promise<string> {
   try {
+    const cleanedHtml = stripCssFromHtml(html)
     const { Readability } = await import('@mozilla/readability')
-    const { JSDOM } = await import('jsdom')
-    const dom = new JSDOM(html)
+    const { JSDOM, VirtualConsole } = await import('jsdom')
+    const virtualConsole = new VirtualConsole()
+    virtualConsole.on('jsdomError', (err) => {
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message?: unknown }).message ?? '')
+          : ''
+      if (message.includes('Could not parse CSS stylesheet')) return
+      console.error(err)
+    })
+
+    const dom = new JSDOM(cleanedHtml, { virtualConsole })
     const reader = new Readability(dom.window.document)
     const article = reader.parse()
     const text = (article?.textContent ?? '').replace(/\s+/g, ' ').trim()
@@ -82,6 +93,10 @@ async function extractReadabilityText(html: string): Promise<string> {
   } catch {
     return ''
   }
+}
+
+function stripCssFromHtml(html: string): string {
+  return html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
 }
 
 export async function extractEmbeddedYouTubeUrlFromHtml(

@@ -44,6 +44,7 @@
     "prepare": "pnpm build",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "summarize": "tsx src/cli.ts",
+    "s": "tsx src/cli.ts",
     "format": "biome format --write .",
     "lint": "biome check . && oxlint --type-aware --tsconfig tsconfig.build.json --config .oxlintrc.json .",
     "lint:fix": "biome check --write . && oxlint --type-aware --tsconfig tsconfig.build.json --config .oxlintrc.json --fix .",

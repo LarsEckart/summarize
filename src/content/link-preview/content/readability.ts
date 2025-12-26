@@ -10,9 +10,20 @@ export async function extractReadabilityFromHtml(
   url?: string
 ): Promise<ReadabilityResult | null> {
   try {
+    const cleanedHtml = stripCssFromHtml(html)
     const { Readability } = await import('@mozilla/readability')
-    const { JSDOM } = await import('jsdom')
-    const dom = new JSDOM(html, url ? { url } : undefined)
+    const { JSDOM, VirtualConsole } = await import('jsdom')
+    const virtualConsole = new VirtualConsole()
+    virtualConsole.on('jsdomError', (err) => {
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message?: unknown }).message ?? '')
+          : ''
+      if (message.includes('Could not parse CSS stylesheet')) return
+      console.error(err)
+    })
+
+    const dom = new JSDOM(cleanedHtml, { ...(url ? { url } : undefined), virtualConsole })
     const reader = new Readability(dom.window.document)
     const article = reader.parse()
     if (!article) return null
@@ -43,4 +54,9 @@ function escapeHtml(input: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+}
+
+function stripCssFromHtml(html: string): string {
+  // Readability doesn't need CSS; jsdom's CSS parsing can be extremely slow on some pages.
+  return html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
 }
