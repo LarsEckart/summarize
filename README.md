@@ -27,6 +27,16 @@ npx -y @steipete/summarize "https://example.com"
 npm i -g @steipete/summarize
 ```
 
+- npm (library / minimal deps):
+
+```bash
+npm i @steipete/summarize-core
+```
+
+```ts
+import { createLinkPreviewClient } from '@steipete/summarize-core/content'
+```
+
 - Homebrew (custom tap):
 
 ```bash
@@ -386,7 +396,12 @@ The CLI uses the LiteLLM model catalog for model limits (like max output tokens)
 
 ## Library usage (optional)
 
-This package also exports a small library:
+Recommended (minimal deps):
+
+- `@steipete/summarize-core/content`
+- `@steipete/summarize-core/prompts`
+
+Compatibility (pulls in CLI deps):
 
 - `@steipete/summarize/content`
 - `@steipete/summarize/prompts`

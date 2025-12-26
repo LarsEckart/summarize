@@ -1,3 +1,15 @@
 # Summarize Guardrails
 
 - Hard rule: single source of truth = `~/Projects/summarize`; never commit in `vendor/summarize` (treat it as a read-only checkout).
+
+## Workspace layout (note)
+
+- Monorepo (pnpm workspace).
+- Packages:
+  - `@steipete/summarize` = CLI + UX (TTY/progress/streaming). Depends on core.
+  - `@steipete/summarize-core` (`packages/core`) = library surface for programmatic use (Sweetistics etc). No CLI entrypoints.
+- Versioning: lockstep versions; publish order: core first, then CLI (`scripts/release.sh` / `RELEASING.md`).
+- Dev:
+  - Build: `pnpm -s build` (builds core first)
+  - Gate: `pnpm -s check`
+  - Import from apps: prefer `@steipete/summarize-core` to avoid pulling CLI-only deps.

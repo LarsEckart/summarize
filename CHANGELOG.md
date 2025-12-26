@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.7.0 - Unreleased
+## 0.6.2 - 2025-12-26
 
 ### Highlights
 
+- Packages: split into `@steipete/summarize-core` (library) + `@steipete/summarize` (CLI; depends on core). Versions are lockstep.
 - Streaming: scrollback-safe Markdown streaming (hybrid: line-by-line + block buffering for fenced code + tables). No cursor control, no full-frame redraws.
 - Output: Markdown rendering is automatic on TTY; use `--plain` for raw Markdown/text output.
 - Finish line: compact separators (`·`) and no duplicated `… words` when transcript stats are shown.
