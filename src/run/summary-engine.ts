@@ -402,7 +402,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
             if (lastNl >= 0 && lastNl + 1 > plainFlushedLen) {
               if (!cleared) {
                 deps.clearProgressForStdout()
-                deps.stdout.write('\n\n')
+                deps.stdout.write('\n')
                 cleared = true
               }
               deps.clearProgressForStdout()
@@ -417,7 +417,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
             if (out) {
               deps.clearProgressForStdout()
               if (!wroteLeadingBlankLine) {
-                deps.stdout.write(`\n\n${out.replace(/^\n+/, '')}`)
+                deps.stdout.write(`\n${out.replace(/^\n+/, '')}`)
                 wroteLeadingBlankLine = true
               } else {
                 deps.stdout.write(out)
@@ -436,7 +436,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
           if (out) {
             deps.clearProgressForStdout()
             if (!wroteLeadingBlankLine) {
-              deps.stdout.write(`\n\n${out.replace(/^\n+/, '')}`)
+              deps.stdout.write(`\n${out.replace(/^\n+/, '')}`)
               wroteLeadingBlankLine = true
             } else {
               deps.stdout.write(out)
