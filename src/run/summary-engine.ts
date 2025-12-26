@@ -402,6 +402,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
             if (lastNl >= 0 && lastNl + 1 > plainFlushedLen) {
               if (!cleared) {
                 deps.clearProgressForStdout()
+                deps.stdout.write('\n')
                 cleared = true
               }
               deps.stdout.write(streamed.slice(plainFlushedLen, lastNl + 1))
@@ -413,7 +414,10 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
           if (shouldStreamRenderedMarkdownToStdout && streamer) {
             const out = streamer.push(merged.appended)
             if (out) {
-              deps.clearProgressForStdout()
+              if (!cleared) {
+                deps.clearProgressForStdout()
+                cleared = true
+              }
               if (!wroteLeadingBlankLine) {
                 deps.stdout.write(`\n${out.replace(/^\n+/, '')}`)
                 wroteLeadingBlankLine = true

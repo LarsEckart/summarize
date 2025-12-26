@@ -54,7 +54,7 @@
     "release": "bash scripts/release.sh"
   },
   "dependencies": {
-    "@steipete/summarize-core": "0.6.2"
+    "@steipete/summarize-core": "0.7.0"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "3.0.1",
