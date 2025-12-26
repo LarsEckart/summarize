@@ -60,7 +60,9 @@ phase_smoke() {
   banner "Smoke"
   run npm view @steipete/summarize version
   run npm view @steipete/summarize-core version
-  run pnpm -s dlx @steipete/summarize --help >/dev/null
+  local version
+  version="$(node -p 'require(\"./package.json\").version')"
+  run bash -c "pnpm -s dlx @steipete/summarize@${version} --help >/dev/null"
   echo "ok"
 }
 
