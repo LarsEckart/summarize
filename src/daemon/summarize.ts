@@ -1,6 +1,8 @@
-import { createLinkPreviewClient } from '@steipete/summarize-core/content'
+import { createLinkPreviewClient, type ExtractedLinkContent } from '@steipete/summarize-core/content'
 import { countTokens } from 'gpt-tokenizer'
 
+import { buildExtractCacheKey, hashString, normalizeContentForHash } from '../cache.js'
+import type { CacheStore } from '../cache.js'
 import { buildLinkSummaryPrompt } from '../prompts/index.js'
 import { resolveTwitterCookies } from '../run/cookies/twitter.js'
 import { buildFinishLineText, buildLengthPartsForFinishLine } from '../run/finish-line.js'
@@ -55,6 +57,7 @@ export async function streamSummaryForVisiblePage({
   lengthRaw,
   languageRaw,
   sink,
+  cache,
 }: {
   env: Record<string, string | undefined>
   fetchImpl: typeof fetch
@@ -64,6 +67,7 @@ export async function streamSummaryForVisiblePage({
   lengthRaw: unknown
   languageRaw: unknown
   sink: StreamSink
+  cache?: { store: CacheStore | null; ttlMs: number } | null
 }): Promise<{ usedModel: string; metrics: VisiblePageMetrics }> {
   const startedAt = Date.now()
   const ctx = createDaemonRunContext({
@@ -113,6 +117,9 @@ export async function streamSummaryForVisiblePage({
   })
   const promptTokens = countTokens(prompt)
 
+  const cacheStore = cache?.store ?? null
+  const contentHash = cacheStore ? hashString(normalizeContentForHash(input.text)) : null
+
   const { usedModel } = await runPrompt({
     ctx,
     prompt,
@@ -120,6 +127,13 @@ export async function streamSummaryForVisiblePage({
     kind: 'website',
     requiresVideoUnderstanding: false,
     sink,
+    cache: cacheStore
+      ? {
+          store: cacheStore,
+          ttlMs: cache?.ttlMs ?? 0,
+          contentHash,
+        }
+      : null,
   })
 
   const report = await ctx.metrics.buildReport()
@@ -167,6 +181,7 @@ export async function streamSummaryForUrl({
   lengthRaw,
   languageRaw,
   sink,
+  cache,
 }: {
   env: Record<string, string | undefined>
   fetchImpl: typeof fetch
@@ -176,6 +191,7 @@ export async function streamSummaryForUrl({
   lengthRaw: unknown
   languageRaw: unknown
   sink: StreamSink
+  cache?: { store: CacheStore | null; ttlMs: number } | null
 }): Promise<{ usedModel: string; metrics: VisiblePageMetrics }> {
   const startedAt = Date.now()
   const ctx = createDaemonRunContext({
@@ -189,6 +205,18 @@ export async function streamSummaryForUrl({
 
   const writeStatus = typeof sink.writeStatus === 'function' ? sink.writeStatus : null
   writeStatus?.('Extracting…')
+
+  const cacheStore = cache?.store ?? null
+  const fetchOptions = {
+    timeoutMs: 120_000,
+    maxCharacters:
+      input.maxCharacters && input.maxCharacters > 0 ? input.maxCharacters : 120_000,
+    cacheMode: 'default' as const,
+    youtubeTranscript: 'auto' as const,
+    firecrawl: 'off' as const,
+    format: 'text' as const,
+    markdownMode: 'readability' as const,
+  }
 
   const client = createLinkPreviewClient({
     fetch: fetchImpl,
@@ -206,24 +234,30 @@ export async function streamSummaryForUrl({
         warnings: res.warnings,
       }
     },
+    transcriptCache: cacheStore ? cacheStore.transcriptCache : null,
     onProgress: (event) => {
       const msg = formatProgress(event)
       if (msg) writeStatus?.(msg)
     },
   })
 
-  const maxCharacters =
-    input.maxCharacters && input.maxCharacters > 0 ? input.maxCharacters : 120_000
+  const extractCacheKey =
+    cacheStore && fetchOptions.cacheMode === 'default'
+      ? buildExtractCacheKey({ url: input.url, options: fetchOptions })
+      : null
 
-  const extracted = await client.fetchLinkContent(input.url, {
-    timeoutMs: 120_000,
-    maxCharacters,
-    cacheMode: 'default',
-    youtubeTranscript: 'auto',
-    firecrawl: 'off',
-    format: 'text',
-    markdownMode: 'readability',
-  })
+  let extracted: ExtractedLinkContent | null = null
+
+  if (extractCacheKey && cacheStore) {
+    extracted = cacheStore.getJson<ExtractedLinkContent>('extract', extractCacheKey)
+  }
+
+  if (!extracted) {
+    extracted = await client.fetchLinkContent(input.url, fetchOptions)
+    if (extractCacheKey && cacheStore) {
+      cacheStore.setJson('extract', extractCacheKey, extracted, cache?.ttlMs ?? null)
+    }
+  }
 
   const isYouTube =
     extracted.siteName === 'YouTube' || /youtube\.com|youtu\.be/i.test(extracted.url)
@@ -304,6 +338,8 @@ export async function streamSummaryForUrl({
   const promptTokens = countTokens(prompt)
 
   const kind = extracted.video?.kind === 'youtube' ? 'youtube' : 'website'
+  const contentHash = cacheStore ? hashString(normalizeContentForHash(extracted.content)) : null
+
   const { usedModel } = await runPrompt({
     ctx,
     prompt,
@@ -311,6 +347,13 @@ export async function streamSummaryForUrl({
     kind,
     requiresVideoUnderstanding: extracted.isVideoOnly,
     sink,
+    cache: cacheStore
+      ? {
+          store: cacheStore,
+          ttlMs: cache?.ttlMs ?? 0,
+          contentHash,
+        }
+      : null,
   })
 
   const report = await ctx.metrics.buildReport()

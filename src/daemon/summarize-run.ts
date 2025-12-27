@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process'
 import { Writable } from 'node:stream'
 
+import { buildSummaryCacheKey, extractTaggedBlock, hashString } from '../cache.js'
+import type { CacheStore } from '../cache.js'
 import type { OutputLanguage } from '../language.js'
 import { resolveOutputLanguage } from '../language.js'
 import { parseGatewayStyleModelId } from '../llm/model-id.js'
@@ -40,6 +42,21 @@ export type DaemonRunContext = {
   ytDlpPath: string | null
   falApiKey: string | null
   openaiTranscriptionKey: string | null
+}
+
+function buildLengthKey(summaryLength: SummaryLengthTarget): string {
+  return typeof summaryLength === 'string'
+    ? `preset:${summaryLength}`
+    : `chars:${summaryLength.maxCharacters}`
+}
+
+function buildLanguageKey(outputLanguage: OutputLanguage): string {
+  return outputLanguage.kind === 'auto' ? 'auto' : outputLanguage.tag
+}
+
+function buildPromptHash(prompt: string): string {
+  const instructions = extractTaggedBlock(prompt, 'instructions') ?? prompt
+  return hashString(instructions.trim())
 }
 
 function createWritableFromSink(sink: StreamSink): NodeJS.WritableStream {
@@ -284,6 +301,7 @@ export async function runPrompt({
   kind,
   requiresVideoUnderstanding,
   sink,
+  cache,
 }: {
   ctx: DaemonRunContext
   prompt: string
@@ -291,13 +309,49 @@ export async function runPrompt({
   kind: Parameters<typeof buildAutoModelAttempts>[0]['kind']
   requiresVideoUnderstanding: boolean
   sink: StreamSink
-}): Promise<{ usedModel: string }> {
+  cache?: { store: CacheStore | null; ttlMs: number; contentHash: string | null } | null
+}): Promise<{ usedModel: string; cacheStatus: 'hit' | 'miss' | 'bypass' }> {
   const attempts = await buildModelAttemptsForPrompt({
     ctx,
     promptTokens,
     kind,
     requiresVideoUnderstanding,
   })
+
+  const cacheStore = cache?.store ?? null
+  const contentHash = cache?.contentHash ?? null
+  const cacheStatusBase: 'bypass' | 'miss' = cacheStore && contentHash ? 'miss' : 'bypass'
+
+  if (cacheStore && contentHash) {
+    const promptHash = buildPromptHash(prompt)
+    const lengthKey = buildLengthKey(ctx.summaryLength)
+    const languageKey = buildLanguageKey(ctx.outputLanguage)
+
+    for (const attempt of attempts) {
+      if (!ctx.summaryEngine.envHasKeyFor(attempt.requiredEnv)) continue
+      const key = buildSummaryCacheKey({
+        contentHash,
+        promptHash,
+        model: attempt.userModelId,
+        lengthKey,
+        languageKey,
+      })
+      const cached = cacheStore.getText('summary', key)
+      if (!cached) continue
+      sink.onModelChosen(attempt.userModelId)
+      const withLeadingNewline = cached.includes('\n') ? `\n${cached}` : cached
+      sink.writeChunk(
+        withLeadingNewline.endsWith('\n') ? withLeadingNewline : `${withLeadingNewline}\n`
+      )
+      return {
+        usedModel: pickCanonicalUsedModel({
+          usedAttempt: attempt,
+          requestedModelLabel: ctx.requestedModelLabel,
+        }),
+        cacheStatus: 'hit',
+      }
+    }
+  }
 
   const { result, usedAttempt, missingRequiredEnvs, lastError } = await runModelAttempts({
     attempts,
@@ -326,10 +380,25 @@ export async function runPrompt({
     throw new Error(msg)
   }
 
+  if (cacheStore && contentHash) {
+    const promptHash = buildPromptHash(prompt)
+    const lengthKey = buildLengthKey(ctx.summaryLength)
+    const languageKey = buildLanguageKey(ctx.outputLanguage)
+    const key = buildSummaryCacheKey({
+      contentHash,
+      promptHash,
+      model: usedAttempt.userModelId,
+      lengthKey,
+      languageKey,
+    })
+    cacheStore.setText('summary', key, result.summary, cache?.ttlMs ?? null)
+  }
+
   return {
     usedModel: pickCanonicalUsedModel({
       usedAttempt,
       requestedModelLabel: ctx.requestedModelLabel,
     }),
+    cacheStatus: cacheStatusBase,
   }
 }
