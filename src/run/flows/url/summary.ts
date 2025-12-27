@@ -50,7 +50,7 @@ export function buildUrlPrompt({
     siteName: extracted.siteName,
     description: extracted.description,
     content: extracted.content,
-    truncated: false,
+    truncated: extracted.truncated,
     hasTranscript:
       isYouTube ||
       (extracted.transcriptSource !== null && extracted.transcriptSource !== 'unavailable'),

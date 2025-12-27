@@ -1,5 +1,6 @@
 import type { CacheState } from '../../../cache.js'
 import type { SummarizeConfig } from '../../../config.js'
+import type { ExtractedLinkContent, LinkPreviewProgressEvent } from '../../../content/index.js'
 import type { LlmCall, RunMetricsReport } from '../../../costs.js'
 import type { OutputLanguage } from '../../../language.js'
 import type { ExecFileFn } from '../../../markitdown.js'
@@ -15,6 +16,7 @@ export type UrlFlowContext = {
   stderr: NodeJS.WritableStream
   execFileImpl: ExecFileFn
   timeoutMs: number
+  maxExtractCharacters?: number | null
   retries: number
   format: 'text' | 'markdown'
   markdownMode: 'off' | 'auto' | 'llm' | 'readability'
@@ -27,6 +29,9 @@ export type UrlFlowContext = {
   promptOverride?: string | null
   lengthInstruction?: string | null
   languageInstruction?: string | null
+  onModelChosen?: ((modelId: string) => void) | null
+  onExtracted?: ((extracted: ExtractedLinkContent) => void) | null
+  onLinkPreviewProgress?: ((event: LinkPreviewProgressEvent) => void) | null
   maxOutputTokensArg: number | null
   requestedModel: RequestedModel
   requestedModelInput: string

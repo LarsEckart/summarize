@@ -133,7 +133,13 @@ export async function runUrlFlow({
     },
     fetch: ctx.trackedFetch,
     transcriptCache,
-    onProgress: websiteProgress?.onProgress ?? null,
+    onProgress:
+      websiteProgress || ctx.onLinkPreviewProgress
+        ? (event) => {
+            websiteProgress?.onProgress(event)
+            ctx.onLinkPreviewProgress?.(event)
+          }
+        : null,
   })
 
   let stopped = false
@@ -151,6 +157,10 @@ export async function runUrlFlow({
   try {
     const buildFetchOptions = (): FetchLinkContentOptions => ({
       timeoutMs: ctx.timeoutMs,
+      maxCharacters:
+        typeof ctx.maxExtractCharacters === 'number' && ctx.maxExtractCharacters > 0
+          ? ctx.maxExtractCharacters
+          : undefined,
       youtubeTranscript: ctx.youtubeMode,
       firecrawl: ctx.firecrawlMode,
       format: markdown.markdownRequested ? 'markdown' : 'text',
@@ -169,6 +179,9 @@ export async function runUrlFlow({
                 firecrawl: options.firecrawl,
                 format: options.format,
                 markdownMode: options.markdownMode ?? null,
+                ...(typeof options.maxCharacters === 'number'
+                  ? { maxCharacters: options.maxCharacters }
+                  : {}),
               },
             })
           : null
@@ -262,6 +275,7 @@ export async function runUrlFlow({
               ctx.fixedModelSpec.provider === 'google'))
 
         if (canVideoUnderstand) {
+          ctx.onExtracted?.(extracted)
           if (ctx.progressEnabled) spinner.setText('Downloading video…')
           const loadedVideo = await loadRemoteAsset({
             url: extracted.video.url,
@@ -278,6 +292,7 @@ export async function runUrlFlow({
             attachment: loadedVideo.attachment,
             onModelChosen: (modelId) => {
               chosenModel = modelId
+              ctx.onModelChosen?.(modelId)
               if (ctx.progressEnabled) spinner.setText(`Summarizing video (model: ${modelId})…`)
             },
           })
@@ -289,6 +304,8 @@ export async function runUrlFlow({
         }
       }
     }
+
+    ctx.onExtracted?.(extracted)
 
     const prompt = buildUrlPrompt({
       extracted,
@@ -324,6 +341,7 @@ export async function runUrlFlow({
     }
 
     const onModelChosen = (modelId: string) => {
+      ctx.onModelChosen?.(modelId)
       if (!ctx.progressEnabled) return
       spinner.setText(
         `Summarizing (sent ${extractionUi.contentSizeLabel}${extractionUi.viaSourceLabel}, model: ${modelId})…`

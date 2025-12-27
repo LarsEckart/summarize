@@ -179,10 +179,6 @@ export async function runDaemonServer({
     noCacheFlag: false,
     transcriptNamespace: 'yt:auto',
   })
-  const cache =
-    cacheState.mode === 'default' && cacheState.store
-      ? { store: cacheState.store, ttlMs: cacheState.ttlMs }
-      : null
 
   const sessions = new Map<string, Session>()
 
@@ -302,7 +298,7 @@ export async function runDaemonServer({
                     languageRaw,
                     input: { url: pageUrl, title, maxCharacters },
                     sink,
-                    cache,
+                    cache: cacheState,
                   })
                 : await streamSummaryForVisiblePage({
                     env,
@@ -313,7 +309,7 @@ export async function runDaemonServer({
                     languageRaw,
                     input: { url: pageUrl, title, text: textContent, truncated },
                     sink,
-                    cache,
+                    cache: cacheState,
                   })
             }
 
