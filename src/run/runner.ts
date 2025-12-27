@@ -4,7 +4,6 @@ import { CommanderError } from 'commander'
 import {
   type CacheState,
   clearCacheFiles,
-  createCacheStore,
   DEFAULT_CACHE_MAX_MB,
   DEFAULT_CACHE_TTL_DAYS,
   resolveCachePath,
@@ -36,6 +35,7 @@ import { handleFileInput, handleUrlAsset } from './flows/asset/input.js'
 import { summarizeAsset as summarizeAssetFlow } from './flows/asset/summary.js'
 import { runUrlFlow } from './flows/url/flow.js'
 import { attachRichHelp, buildProgram } from './help.js'
+import { createCacheStateFromConfig } from './cache-state.js'
 import { createProgressGate } from './progress.js'
 import { resolveConfigState } from './run-config.js'
 import { resolveEnvState } from './run-env.js'
@@ -332,35 +332,13 @@ export async function runCli(
       ? `Output should be ${outputLanguage.label}.`
       : null
 
-  const cacheEnabled = config?.cache?.enabled !== false
-  const cachePath = resolveCachePath({
-    env: envForRun,
-    cachePath: config?.cache?.path ?? null,
-  })
-  const cacheMaxMb =
-    typeof config?.cache?.maxMb === 'number' ? config.cache.maxMb : DEFAULT_CACHE_MAX_MB
-  const cacheTtlDays =
-    typeof config?.cache?.ttlDays === 'number' ? config.cache.ttlDays : DEFAULT_CACHE_TTL_DAYS
-  const cacheMaxBytes = Math.max(0, cacheMaxMb) * 1024 * 1024
-  const cacheTtlMs = Math.max(0, cacheTtlDays) * 24 * 60 * 60 * 1000
-  const cacheMode: CacheState['mode'] =
-    !cacheEnabled || noCacheFlag || !cachePath ? 'bypass' : 'default'
   const transcriptNamespace = `yt:${youtubeMode}`
-  const cacheStore =
-    cacheMode === 'default' && cachePath
-      ? await createCacheStore({
-          path: cachePath,
-          maxBytes: cacheMaxBytes,
-          transcriptNamespace,
-        })
-      : null
-  const cacheState: CacheState = {
-    mode: cacheMode,
-    store: cacheStore,
-    ttlMs: cacheTtlMs,
-    maxBytes: cacheMaxBytes,
-    path: cachePath,
-  }
+  const cacheState: CacheState = await createCacheStateFromConfig({
+    envForRun,
+    config,
+    noCacheFlag,
+    transcriptNamespace,
+  })
 
   try {
     const {
@@ -654,6 +632,6 @@ export async function runCli(
 
     await runUrlFlow({ ctx: urlFlowContext, url, isYoutubeUrl })
   } finally {
-    cacheStore?.close()
+    cacheState.store?.close()
   }
 }

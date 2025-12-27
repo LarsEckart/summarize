@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import http from 'node:http'
-import {
-  createCacheStore,
-  DEFAULT_CACHE_MAX_MB,
-  DEFAULT_CACHE_TTL_DAYS,
-  resolveCachePath,
-} from '../cache.js'
 import { loadSummarizeConfig } from '../config.js'
+import { createCacheStateFromConfig } from '../run/cache-state.js'
 import { formatModelLabelForDisplay } from '../run/finish-line.js'
 import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import type { DaemonConfig } from './config.js'
@@ -178,28 +173,16 @@ export async function runDaemonServer({
   port?: number
 }): Promise<void> {
   const { config: summarizeConfig } = loadSummarizeConfig({ env })
-  const cacheEnabled = summarizeConfig?.cache?.enabled !== false
-  const cachePath = resolveCachePath({ env, cachePath: summarizeConfig?.cache?.path ?? null })
-  const cacheMaxMb =
-    typeof summarizeConfig?.cache?.maxMb === 'number'
-      ? summarizeConfig.cache.maxMb
-      : DEFAULT_CACHE_MAX_MB
-  const cacheTtlDays =
-    typeof summarizeConfig?.cache?.ttlDays === 'number'
-      ? summarizeConfig.cache.ttlDays
-      : DEFAULT_CACHE_TTL_DAYS
-  const cacheMaxBytes = Math.max(0, cacheMaxMb) * 1024 * 1024
-  const cacheTtlMs = Math.max(0, cacheTtlDays) * 24 * 60 * 60 * 1000
-  const cacheMode = !cacheEnabled || !cachePath ? 'bypass' : 'default'
-  const cacheStore =
-    cacheMode === 'default' && cachePath
-      ? await createCacheStore({
-          path: cachePath,
-          maxBytes: cacheMaxBytes,
-          transcriptNamespace: 'yt:auto',
-        })
+  const cacheState = await createCacheStateFromConfig({
+    envForRun: env,
+    config: summarizeConfig,
+    noCacheFlag: false,
+    transcriptNamespace: 'yt:auto',
+  })
+  const cache =
+    cacheState.mode === 'default' && cacheState.store
+      ? { store: cacheState.store, ttlMs: cacheState.ttlMs }
       : null
-  const cache = cacheStore ? { store: cacheStore, ttlMs: cacheTtlMs } : null
 
   const sessions = new Map<string, Session>()
 
@@ -455,6 +438,6 @@ export async function runDaemonServer({
       process.once('SIGINT', onSignal)
     })
   } finally {
-    cacheStore?.close()
+    cacheState.store?.close()
   }
 }
