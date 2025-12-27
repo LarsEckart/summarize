@@ -27,7 +27,31 @@ const setStatus = (text: string) => {
 }
 
 const lengthPresets = ['short', 'medium', 'long', 'xl', 'xxl', '20k']
-const languagePresets = ['auto', 'en', 'de', 'es', 'fr', 'it', 'pt', 'ja', 'zh', 'ko']
+const languagePresets = [
+  'auto',
+  'en',
+  'de',
+  'es',
+  'fr',
+  'it',
+  'pt',
+  'nl',
+  'sv',
+  'no',
+  'da',
+  'fi',
+  'pl',
+  'cs',
+  'tr',
+  'ru',
+  'uk',
+  'ar',
+  'hi',
+  'ja',
+  'ko',
+  'zh-cn',
+  'zh-tw',
+]
 
 async function load() {
   const s = await loadSettings()

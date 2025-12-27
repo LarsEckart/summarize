@@ -84,6 +84,7 @@ let lastMeta: { inputSummary: string | null; model: string | null; modelLabel: s
   model: null,
   modelLabel: null,
 }
+let drawerAnimation: Animation | null = null
 
 function ensureSelectValue(select: HTMLSelectElement, value: unknown): string {
   const normalized = typeof value === 'string' ? value.trim() : ''
@@ -340,9 +341,81 @@ function send(message: PanelToBg) {
   })
 }
 
-function toggleDrawer(force?: boolean) {
-  const next = typeof force === 'boolean' ? force : drawerEl.classList.contains('hidden')
-  drawerEl.classList.toggle('hidden', !next)
+function toggleDrawer(force?: boolean, opts?: { animate?: boolean }) {
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false
+  const animate = opts?.animate !== false && !reducedMotion
+
+  const isOpen = !drawerEl.classList.contains('hidden')
+  const next = typeof force === 'boolean' ? force : !isOpen
+
+  drawerToggleBtn.classList.toggle('isActive', next)
+  drawerToggleBtn.setAttribute('aria-expanded', next ? 'true' : 'false')
+  drawerEl.setAttribute('aria-hidden', next ? 'false' : 'true')
+
+  if (next === isOpen) return
+
+  const cleanup = () => {
+    drawerEl.style.removeProperty('height')
+    drawerEl.style.removeProperty('opacity')
+    drawerEl.style.removeProperty('transform')
+    drawerEl.style.removeProperty('overflow')
+  }
+
+  drawerAnimation?.cancel()
+  drawerAnimation = null
+  cleanup()
+
+  if (!animate) {
+    drawerEl.classList.toggle('hidden', !next)
+    return
+  }
+
+  if (next) {
+    drawerEl.classList.remove('hidden')
+    const targetHeight = drawerEl.scrollHeight
+    drawerEl.style.height = '0px'
+    drawerEl.style.opacity = '0'
+    drawerEl.style.transform = 'translateY(-6px)'
+    drawerEl.style.overflow = 'hidden'
+
+    drawerAnimation = drawerEl.animate(
+      [
+        { height: '0px', opacity: 0, transform: 'translateY(-6px)' },
+        { height: `${targetHeight}px`, opacity: 1, transform: 'translateY(0px)' },
+      ],
+      { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+    )
+    drawerAnimation.onfinish = () => {
+      drawerAnimation = null
+      cleanup()
+    }
+    drawerAnimation.oncancel = () => {
+      drawerAnimation = null
+    }
+    return
+  }
+
+  const currentHeight = drawerEl.getBoundingClientRect().height
+  drawerEl.style.height = `${currentHeight}px`
+  drawerEl.style.opacity = '1'
+  drawerEl.style.transform = 'translateY(0px)'
+  drawerEl.style.overflow = 'hidden'
+
+  drawerAnimation = drawerEl.animate(
+    [
+      { height: `${currentHeight}px`, opacity: 1, transform: 'translateY(0px)' },
+      { height: '0px', opacity: 0, transform: 'translateY(-6px)' },
+    ],
+    { duration: 180, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+  )
+  drawerAnimation.onfinish = () => {
+    drawerAnimation = null
+    drawerEl.classList.add('hidden')
+    cleanup()
+  }
+  drawerAnimation.oncancel = () => {
+    drawerAnimation = null
+  }
 }
 
 summarizeBtn.addEventListener('click', () => send({ type: 'panel:summarize' }))
@@ -376,7 +449,7 @@ void (async () => {
   modelEl.value = s.model
   autoEl.checked = s.autoSummarize
   applyTypography(fontEl.value, s.fontSize)
-  toggleDrawer(false)
+  toggleDrawer(false, { animate: false })
   chrome.runtime.onMessage.addListener((msg: BgToPanel) => {
     handleBgMessage(msg)
   })
