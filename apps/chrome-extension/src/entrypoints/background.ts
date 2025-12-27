@@ -48,43 +48,6 @@ function canSummarizeUrl(url: string | undefined): url is string {
   return true
 }
 
-function isYoutubeVideoUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    const host = u.hostname.toLowerCase()
-    if (host === 'youtu.be') return Boolean(u.pathname.split('/').filter(Boolean)[0])
-    if (!host.endsWith('youtube.com')) return false
-
-    if (u.pathname === '/watch') return Boolean(u.searchParams.get('v')?.trim())
-    if (u.pathname.startsWith('/shorts/')) return true
-    if (u.pathname.startsWith('/live/')) return true
-    if (u.pathname.startsWith('/embed/')) return true
-
-    return false
-  } catch {
-    return false
-  }
-}
-
-function isTwitterStatusUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    const host = u.hostname.toLowerCase()
-    if (host !== 'x.com' && host !== 'twitter.com') return false
-    return /\/status\/\d+/i.test(u.pathname)
-  } catch {
-    return false
-  }
-}
-
-function isDirectMediaUrl(url: string): boolean {
-  return /\.(mp4|mov|m4v|mkv|webm|mp3|m4a|wav|flac|aac)(\?|#|$)/i.test(url)
-}
-
-function shouldUseUrlMode(url: string): boolean {
-  return isYoutubeVideoUrl(url) || isTwitterStatusUrl(url) || isDirectMediaUrl(url)
-}
-
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   return tab ?? null
@@ -253,19 +216,17 @@ export default defineBackground(() => {
     runController?.abort()
     runController = new AbortController()
 
-    const urlMode = shouldUseUrlMode(tab.url)
-    const extracted = urlMode
-      ? ({ ok: true, url: tab.url, title: tab.title ?? null, text: '', truncated: false } as const)
-      : await (async () => {
-          sendStatus(`Extracting… (${reason})`)
-          const extractedAttempt = await extractFromTab(tab.id, settings.maxChars)
-          if (!extractedAttempt.ok) {
-            void send({ type: 'run:error', message: extractedAttempt.error })
-            sendStatus(`Error: ${extractedAttempt.error}`)
-            return null
-          }
-          return extractedAttempt.data
-        })()
+    sendStatus(`Extracting… (${reason})`)
+    const extractedAttempt = await extractFromTab(tab.id, settings.maxChars)
+    const extracted = extractedAttempt.ok
+      ? extractedAttempt.data
+      : {
+          ok: true,
+          url: tab.url,
+          title: tab.title ?? null,
+          text: '',
+          truncated: false,
+        }
 
     if (!extracted) return
 
@@ -294,8 +255,8 @@ export default defineBackground(() => {
           text: extracted.text,
           truncated: extracted.truncated,
           model: settings.model,
-          mode: urlMode ? 'url' : 'page',
-          maxCharacters: urlMode ? settings.maxChars : null,
+          mode: 'auto',
+          maxCharacters: settings.maxChars,
         }),
         signal: runController.signal,
       })

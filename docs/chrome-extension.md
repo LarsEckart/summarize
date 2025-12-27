@@ -40,16 +40,23 @@ Dev (repo checkout):
 
 1) User opens side panel (click extension icon).
 2) Panel sends a “ready” message to the background (plus periodic “ping” heartbeats while open).
-3) On nav/tab change (and auto enabled): background asks the content script to extract `{ url, title, text }`.
+3) On nav/tab change (and auto enabled): background asks the content script to extract `{ url, title, text }` (best-effort).
 4) Background `POST`s payload to daemon `/v1/summarize` with `Authorization: Bearer <token>`.
 5) Panel opens `/v1/summarize/<id>/events` (SSE) and renders streamed Markdown.
 
-## URL Mode (YouTube / Video Pages)
+## Auto Mode (URL + Page Text)
 
-Some pages (e.g. YouTube videos) require daemon-side processing (transcripts, yt-dlp, Whisper).
+The extension always sends the same request shape:
 
-- For normal articles: background sends extracted **text** (`mode: "page"`).
-- For video pages: background sends the **URL only** (`mode: "url"`) and lets the daemon handle extraction/transcripts.
+- Always: `url`, `title`
+- When available: extracted `text` + `truncated`
+- `mode: "auto"`
+
+The daemon decides the best pipeline:
+
+- YouTube / video / podcast / direct media URLs → prefer **URL** pipeline (transcripts, yt-dlp, Whisper, readability, …).
+- Normal articles with extracted text → prefer **page** pipeline (“what you see”).
+- Fallback: if the preferred path fails before output starts, try the other input (when available).
 
 ## SPA Navigation
 
@@ -97,10 +104,10 @@ Problem: daemon must be secured; extension must discover and pair with it.
     - `url: string` (required)
     - `title: string | null`
     - `model?: string` (e.g. `auto`, `free`, `openai/gpt-5-mini`, ...)
-    - `mode?: "page" | "url"` (default: `"page"`)
-    - `maxCharacters?: number | null` (URL mode only; caps extraction before summarization)
-    - `text?: string` (required for `mode: "page"`)
-    - `truncated?: boolean` (page mode only; indicates text was shortened)
+    - `mode?: "auto" | "page" | "url"` (default: `"auto"`)
+    - `maxCharacters?: number | null` (caps URL-mode extraction before summarization)
+    - `text?: string` (required for `mode: "page"`; optional for `auto`)
+    - `truncated?: boolean` (optional; indicates extracted `text` was shortened)
   - 200 JSON: `{ ok: true, id }`
 - `GET /v1/summarize/:id/events` (SSE)
   - `event: chunk` `data: { text }`
