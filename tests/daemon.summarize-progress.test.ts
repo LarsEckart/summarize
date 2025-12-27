@@ -35,12 +35,30 @@ describe('daemon/summarize-progress', () => {
         `${service}: downloading audio…`,
       ],
       [
+        {
+          kind: ProgressKind.TranscriptMediaDownloadProgress,
+          service,
+          downloadedBytes: 50,
+          totalBytes: 100,
+        } as LinkPreviewProgressEvent,
+        `${service}: downloading audio… 50%`,
+      ],
+      [
         { kind: ProgressKind.TranscriptWhisperStart, service } as LinkPreviewProgressEvent,
         `${service}: transcribing…`,
       ],
       [
         { kind: ProgressKind.TranscriptWhisperProgress, service } as LinkPreviewProgressEvent,
         `${service}: transcribing…`,
+      ],
+      [
+        {
+          kind: ProgressKind.TranscriptWhisperProgress,
+          service,
+          processedDurationSeconds: 5,
+          totalDurationSeconds: 10,
+        } as LinkPreviewProgressEvent,
+        `${service}: transcribing… 50%`,
       ],
       [
         { kind: ProgressKind.TranscriptDone, service, ok: true } as LinkPreviewProgressEvent,
