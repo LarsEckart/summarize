@@ -418,16 +418,15 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
               const match = streamed.match(/^\n+/)
               if (match) plainFlushedLen = match[0].length
             }
-            const lastNl = streamed.lastIndexOf('\n')
-            if (lastNl >= 0 && lastNl + 1 > plainFlushedLen) {
+            if (streamed.length > plainFlushedLen) {
               if (!cleared) {
                 deps.clearProgressForStdout()
                 if (isRichTty(deps.stdout)) deps.stdout.write('\n')
                 cleared = true
               }
               deps.clearProgressForStdout()
-              deps.stdout.write(streamed.slice(plainFlushedLen, lastNl + 1))
-              plainFlushedLen = lastNl + 1
+              deps.stdout.write(streamed.slice(plainFlushedLen))
+              plainFlushedLen = streamed.length
             }
             continue
           }

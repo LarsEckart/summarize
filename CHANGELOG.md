@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.8.0 - Unreleased
+## 0.8.1 - Unreleased
+
+### Improvements
+
+- Streaming: flush deltas without newline gating for faster panel updates.
+- Chrome Side Panel: shorten `openrouter/` to `or/` in the metrics footer when it wraps.
+
+## 0.8.0 - 2025-12-28
 
 ### Breaking
 

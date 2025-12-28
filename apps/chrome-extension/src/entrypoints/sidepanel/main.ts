@@ -279,8 +279,30 @@ const isHttpUrl = (value: string) => /^https?:\/\//i.test(value)
 const isLikelyDomain = (value: string) =>
   /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value) && !value.includes('..')
 
-function renderMetricsSummary(summary: string) {
+function metricsWrapsToMultipleLines(): boolean {
+  const styles = getComputedStyle(metricsEl)
+  const lineHeightRaw = styles.lineHeight
+  const fontSize = Number.parseFloat(styles.fontSize) || 0
+  const lineHeight =
+    lineHeightRaw === 'normal' ? fontSize * 1.2 : Number.parseFloat(lineHeightRaw) || 0
+  if (!lineHeight) return false
+
+  const paddingTop = Number.parseFloat(styles.paddingTop) || 0
+  const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0
+  const borderTop = Number.parseFloat(styles.borderTopWidth) || 0
+  const borderBottom = Number.parseFloat(styles.borderBottomWidth) || 0
+  const totalHeight = metricsEl.getBoundingClientRect().height
+  const contentHeight = Math.max(
+    0,
+    totalHeight - paddingTop - paddingBottom - borderTop - borderBottom
+  )
+
+  return contentHeight > lineHeight * 1.4
+}
+
+function renderMetricsSummary(summary: string, options?: { shortenOpenRouter?: boolean }) {
   metricsEl.replaceChildren()
+  const shortenOpenRouter = options?.shortenOpenRouter ?? false
 
   const inputSummary = lastMeta.inputSummary?.trim() ?? ''
   const inputParts = inputSummary
@@ -312,7 +334,15 @@ function renderMetricsSummary(summary: string) {
     return false
   }
 
-  const parts = summary.split(' · ').filter((part) => !shouldOmitPart(part))
+  const parts = summary
+    .split(' · ')
+    .filter((part) => !shouldOmitPart(part))
+    .map((part) => {
+      if (!shortenOpenRouter) return part
+      const trimmed = part.trim()
+      if (!/^openrouter\//i.test(trimmed)) return part
+      return trimmed.replace(/^openrouter\//i, 'or/')
+    })
 
   parts.forEach((part, index) => {
     if (index) metricsEl.append(document.createTextNode(' · '))
@@ -985,6 +1015,9 @@ async function startStream(run: RunStart) {
           elapsedMs: number
         }
         renderMetricsSummary(data.summary)
+        if (/\bopenrouter\//i.test(data.summary) && metricsWrapsToMultipleLines()) {
+          renderMetricsSummary(data.summary, { shortenOpenRouter: true })
+        }
         metricsEl.removeAttribute('title')
         metricsEl.removeAttribute('data-details')
         metricsEl.classList.remove('hidden')
