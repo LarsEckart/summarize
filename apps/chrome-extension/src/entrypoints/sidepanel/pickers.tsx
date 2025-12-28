@@ -175,7 +175,13 @@ function LengthField({
     zIndex: 9999,
   }
   const content = (
-    <div className="pickerPositioner" data-picker="length" data-variant={variant} {...positionerProps} style={positionerStyle}>
+    <div
+      className="pickerPositioner"
+      data-picker="length"
+      data-variant={variant}
+      {...positionerProps}
+      style={positionerStyle}
+    >
       <div className="pickerContent" {...api.getContentProps()}>
         <div className="pickerList" {...api.getListProps()}>
           {lengthItems.map((item) => (

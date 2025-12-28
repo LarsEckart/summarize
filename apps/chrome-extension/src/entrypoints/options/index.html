@@ -66,18 +66,21 @@
           <div class="advancedGrid">
             <label>
               <span>Model</span>
-              <input
-                id="model"
-                type="text"
-                list="modelPresets"
-                placeholder="auto"
-                autocapitalize="off"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <datalist id="modelPresets">
-                <option value="auto" label="Auto"></option>
-              </datalist>
+              <div class="combo">
+                <select id="modelPreset">
+                  <option value="auto">Auto</option>
+                  <option value="custom">Custom…</option>
+                </select>
+                <input
+                  id="modelCustom"
+                  type="text"
+                  placeholder="auto"
+                  autocapitalize="off"
+                  autocomplete="off"
+                  spellcheck="false"
+                  hidden
+                />
+              </div>
               <div class="hint">
                 Tip: configure “free” models via <code>summarize refresh-free</code> (needs <code>OPENROUTER_API_KEY</code>). Writes
                 <code>~/.summarize/config.json</code> (updates <code>models.free</code>). Add <code>--set-default</code> to also set

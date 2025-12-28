@@ -16,8 +16,8 @@ const formEl = byId<HTMLFormElement>('form')
 const statusEl = byId<HTMLSpanElement>('status')
 
 const tokenEl = byId<HTMLInputElement>('token')
-const modelEl = byId<HTMLInputElement>('model')
-const modelPresetsEl = byId<HTMLDataListElement>('modelPresets')
+const modelPresetEl = byId<HTMLSelectElement>('modelPreset')
+const modelCustomEl = byId<HTMLInputElement>('modelCustom')
 const languagePresetEl = byId<HTMLSelectElement>('languagePreset')
 const languageCustomEl = byId<HTMLInputElement>('languageCustom')
 const promptOverrideEl = byId<HTMLTextAreaElement>('promptOverride')
@@ -47,12 +47,18 @@ const setBuildInfo = () => {
 }
 
 function setDefaultModelPresets() {
-  modelPresetsEl.innerHTML = ''
+  modelPresetEl.innerHTML = ''
   {
-    const el = document.createElement('option')
-    el.value = 'auto'
-    el.label = 'Auto'
-    modelPresetsEl.append(el)
+    const auto = document.createElement('option')
+    auto.value = 'auto'
+    auto.textContent = 'Auto'
+    modelPresetEl.append(auto)
+  }
+  {
+    const custom = document.createElement('option')
+    custom.value = 'custom'
+    custom.textContent = 'Custom…'
+    modelPresetEl.append(custom)
   }
 }
 
@@ -74,14 +80,37 @@ function setModelPlaceholderFromDiscovery(discovery: {
   if (discovery.localModelsSource && typeof discovery.localModelsSource === 'object') {
     hints.push('local: openai/<id>')
   }
-  modelEl.placeholder = hints.join(' / ')
+  modelCustomEl.placeholder = hints.join(' / ')
+}
+
+function readCurrentModelValue(): string {
+  return readPresetOrCustomValue({
+    presetValue: modelPresetEl.value,
+    customValue: modelCustomEl.value,
+    defaultValue: defaultSettings.model,
+  })
+}
+
+function setModelValue(value: string) {
+  const next = value.trim() || defaultSettings.model
+  const optionValues = new Set(Array.from(modelPresetEl.options).map((o) => o.value))
+  if (optionValues.has(next) && next !== 'custom') {
+    modelPresetEl.value = next
+    modelCustomEl.hidden = true
+    return
+  }
+  modelPresetEl.value = 'custom'
+  modelCustomEl.hidden = false
+  modelCustomEl.value = next
 }
 
 async function refreshModelPresets(token: string) {
+  const previousModel = readCurrentModelValue()
   const trimmed = token.trim()
   if (!trimmed) {
     setDefaultModelPresets()
     setModelPlaceholderFromDiscovery({})
+    setModelValue(previousModel)
     return
   }
   try {
@@ -90,6 +119,7 @@ async function refreshModelPresets(token: string) {
     })
     if (!res.ok) {
       setDefaultModelPresets()
+      setModelValue(previousModel)
       return
     }
     const json = (await res.json()) as unknown
@@ -116,15 +146,23 @@ async function refreshModelPresets(token: string) {
       })
       .filter((x): x is { id: string; label: string } => x !== null)
 
-    if (options.length === 0) return
+    if (options.length === 0) {
+      setDefaultModelPresets()
+      setModelValue(previousModel)
+      return
+    }
 
-    modelPresetsEl.innerHTML = ''
+    setDefaultModelPresets()
+    const seen = new Set(Array.from(modelPresetEl.options).map((o) => o.value))
     for (const opt of options) {
+      if (seen.has(opt.id)) continue
+      seen.add(opt.id)
       const el = document.createElement('option')
       el.value = opt.id
-      if (opt.label) el.label = opt.label
-      modelPresetsEl.append(el)
+      el.textContent = opt.label ? `${opt.id} — ${opt.label}` : opt.id
+      modelPresetEl.append(el)
     }
+    setModelValue(previousModel)
   } catch {
     // ignore
   }
@@ -179,8 +217,8 @@ const pickers = mountOptionsPickers(pickersRoot, {
 async function load() {
   const s = await loadSettings()
   tokenEl.value = s.token
-  modelEl.value = s.model
   await refreshModelPresets(s.token)
+  setModelValue(s.model)
   {
     const resolved = resolvePresetOrCustom({ value: s.language, presets: languagePresets })
     languagePresetEl.value = resolved.presetValue
@@ -214,12 +252,19 @@ const refreshModelsIfStale = () => {
   void refreshModelPresets(tokenEl.value)
 }
 
-modelEl.addEventListener('focus', refreshModelsIfStale)
-modelEl.addEventListener('pointerdown', refreshModelsIfStale)
+modelPresetEl.addEventListener('focus', refreshModelsIfStale)
+modelPresetEl.addEventListener('pointerdown', refreshModelsIfStale)
+modelCustomEl.addEventListener('focus', refreshModelsIfStale)
+modelCustomEl.addEventListener('pointerdown', refreshModelsIfStale)
 
 languagePresetEl.addEventListener('change', () => {
   languageCustomEl.hidden = languagePresetEl.value !== 'custom'
   if (!languageCustomEl.hidden) languageCustomEl.focus()
+})
+
+modelPresetEl.addEventListener('change', () => {
+  modelCustomEl.hidden = modelPresetEl.value !== 'custom'
+  if (!modelCustomEl.hidden) modelCustomEl.focus()
 })
 
 formEl.addEventListener('submit', (e) => {
@@ -229,7 +274,7 @@ formEl.addEventListener('submit', (e) => {
     const current = await loadSettings()
     await saveSettings({
       token: tokenEl.value || defaultSettings.token,
-      model: modelEl.value || defaultSettings.model,
+      model: readCurrentModelValue(),
       length: current.length,
       language: readPresetOrCustomValue({
         presetValue: languagePresetEl.value,
