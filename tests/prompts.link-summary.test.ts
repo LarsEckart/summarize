@@ -98,4 +98,23 @@ describe('buildLinkSummaryPrompt', () => {
       xxl: 12288,
     })
   })
+
+  it('adds heading guidance for large summaries', () => {
+    const prompt = buildLinkSummaryPrompt({
+      url: 'https://example.com',
+      title: null,
+      siteName: null,
+      description: null,
+      content: 'Body',
+      truncated: false,
+      hasTranscript: false,
+      outputLanguage: { kind: 'fixed', tag: 'en', label: 'English' },
+      summaryLength: { maxCharacters: 10_000 },
+      shares: [],
+    })
+
+    expect(prompt).toContain('Use Markdown headings with the "### " prefix')
+    expect(prompt).toContain('Include at least 3 headings')
+    expect(prompt).toContain('start with a heading')
+  })
 })

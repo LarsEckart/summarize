@@ -44,6 +44,7 @@
 - Streaming: stop/clear progress UI before first streamed output and avoid leading blank lines on non-TTY stdout.
 - URL flow: propagate `extracted.truncated` into the prompt context so summaries can reflect partial inputs.
 - Daemon: unify URL/page summarization with the CLI flows (single code path; keeps extract/cache/model logic in sync).
+- Prompts: auto-require Markdown section headings for longer summaries (xl/xxl or large custom lengths).
 
 ## 0.7.1 - 2025-12-26
 

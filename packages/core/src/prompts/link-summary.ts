@@ -24,16 +24,16 @@ const SUMMARY_LENGTH_DIRECTIVES: Record<SummaryLength, { guidance: string; forma
   xl: {
     guidance:
       'Write a detailed summary in 4–6 short paragraphs. Focus on what the text says (facts, events, arguments) and include concrete numbers or quotes when present.',
-    formatting:
-      'Use Markdown paragraphs separated by single blank lines. Add short Markdown headings to break up longer blocks when it improves scanability.',
+    formatting: 'Use Markdown paragraphs separated by single blank lines.',
   },
   xxl: {
     guidance:
       'Write a comprehensive summary in 6–10 short paragraphs. Cover background, main points, evidence, and stated outcomes in the source text; avoid adding implications or recommendations unless explicitly stated.',
-    formatting:
-      'Use Markdown paragraphs separated by single blank lines. Add short Markdown headings to break up longer blocks when it improves scanability.',
+    formatting: 'Use Markdown paragraphs separated by single blank lines.',
   },
 }
+
+const HEADING_LENGTH_CHAR_THRESHOLD = 6000
 
 export const SUMMARY_LENGTH_TO_TOKENS: Record<SummaryLength, number> = {
   short: 768,
@@ -142,6 +142,14 @@ export function buildLinkSummaryPrompt({
       ? effectiveSummaryLength
       : pickSummaryLengthForCharacters(effectiveSummaryLength.maxCharacters)
   const directive = resolveSummaryDirective(preset)
+  const needsHeadings =
+    preset === 'xl' ||
+    preset === 'xxl' ||
+    (typeof effectiveSummaryLength !== 'string' &&
+      effectiveSummaryLength.maxCharacters >= HEADING_LENGTH_CHAR_THRESHOLD)
+  const headingInstruction = needsHeadings
+    ? 'Use Markdown headings with the "### " prefix to break sections. Include at least 3 headings and start with a heading. Do not use bold for headings.'
+    : ''
   const maxCharactersLine =
     typeof effectiveSummaryLength === 'string'
       ? ''
@@ -178,6 +186,7 @@ export function buildLinkSummaryPrompt({
     audienceLine,
     directive.guidance,
     directive.formatting,
+    headingInstruction,
     maxCharactersLine,
     contentLengthLine,
     formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' }),
