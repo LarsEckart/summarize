@@ -23,6 +23,7 @@ export const fetchTranscript = async (
   context: ProviderContext,
   options: ProviderFetchOptions
 ): Promise<ProviderResult> => {
+  // Diagnostics: used for logging/UX and for tests asserting provider order.
   const attemptedProviders: TranscriptSource[] = []
   const notes: string[] = []
   const { html: initialHtml, url } = context
@@ -30,6 +31,8 @@ export const fetchTranscript = async (
   const hasYoutubeConfig =
     typeof html === 'string' && /ytcfg\.set|ytInitialPlayerResponse/.test(html)
   if (!hasYoutubeConfig) {
+    // Many callers don't pass through the raw watch page HTML. When we don't see the usual
+    // bootstrap tokens, do a best-effort fetch so downstream extractors can work.
     try {
       const response = await options.fetch(url, {
         headers: {
@@ -49,6 +52,7 @@ export const fetchTranscript = async (
   const progress = typeof options.onProgress === 'function' ? options.onProgress : null
   const hasLocalWhisper = await isWhisperCppReady()
   const hasYtDlpCredentials = Boolean(options.openaiApiKey || options.falApiKey || hasLocalWhisper)
+  // yt-dlp fallback only makes sense if we have the binary *and* some transcription path.
   const canRunYtDlp = Boolean(options.ytDlpPath && hasYtDlpCredentials)
   const pushHint = (hint: string) => {
     progress?.({ kind: 'transcript-start', url, service: 'youtube', hint })
@@ -88,6 +92,7 @@ export const fetchTranscript = async (
   }
 
   const effectiveVideoIdCandidate = context.resourceKey ?? extractYouTubeVideoId(url)
+  // Prefer the caller-provided resource key (e.g. from cache routing) over URL parsing.
   const effectiveVideoId =
     typeof effectiveVideoIdCandidate === 'string' && effectiveVideoIdCandidate.trim().length > 0
       ? effectiveVideoIdCandidate.trim()
@@ -98,6 +103,8 @@ export const fetchTranscript = async (
 
   // Try no-auto mode (skip auto-generated captions, fall back to yt-dlp)
   if (mode === 'no-auto') {
+    // "no-auto" is intentionally strict: only accept creator captions (and skip ASR/auto tracks).
+    // We *only* require yt-dlp once we know captions aren't available.
     pushHint('YouTube: checking creator captions only (skipping auto-generated)')
     attemptedProviders.push('captionTracks')
     const manualTranscript = await fetchTranscriptFromCaptionTracks(options.fetch, {
@@ -120,6 +127,8 @@ export const fetchTranscript = async (
 
   // Try web methods (youtubei, captionTracks) if mode is 'auto' or 'web'
   if (mode === 'auto' || mode === 'web') {
+    // youtubei is preferred when available: it returns a clean transcript payload without having
+    // to download/parse caption track formats.
     pushHint('YouTube: checking captions (youtubei)')
     const config = extractYoutubeiTranscriptConfig(html)
     if (config) {
