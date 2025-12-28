@@ -5,10 +5,10 @@ import { buildFinishLineVariants, buildLengthPartsForFinishLine } from '../run/f
 import { deriveExtractionUi } from '../run/flows/url/extract.js'
 import { runUrlFlow } from '../run/flows/url/flow.js'
 import { buildUrlPrompt, summarizeExtractedUrl } from '../run/flows/url/summary.js'
+import type { RunOverrides } from '../run/run-settings.js'
 
 import { createDaemonUrlFlowContext } from './flow-context.js'
 import { countWords, estimateDurationSecondsFromWords, formatInputSummary } from './meta.js'
-import type { DaemonRunOverrides } from './request-settings.js'
 import { formatProgress } from './summarize-progress.js'
 
 export type VisiblePageInput = {
@@ -154,7 +154,7 @@ export async function streamSummaryForVisiblePage({
   languageRaw: unknown
   sink: StreamSink
   cache: CacheState
-  overrides: DaemonRunOverrides
+  overrides: RunOverrides
 }): Promise<{ usedModel: string; metrics: VisiblePageMetrics }> {
   const startedAt = Date.now()
   let usedModel: string | null = null
@@ -300,7 +300,7 @@ export async function streamSummaryForUrl({
   languageRaw: unknown
   sink: StreamSink
   cache: CacheState
-  overrides: DaemonRunOverrides
+  overrides: RunOverrides
 }): Promise<{ usedModel: string; metrics: VisiblePageMetrics }> {
   const startedAt = Date.now()
   let usedModel: string | null = null

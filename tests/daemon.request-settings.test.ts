@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveDaemonRunOverrides } from '../src/daemon/request-settings.js'
+import { resolveRunOverrides } from '../src/run/run-settings.js'
 
-describe('daemon/request-settings', () => {
+describe('run/run-settings overrides', () => {
   it('parses mode overrides when valid', () => {
-    const overrides = resolveDaemonRunOverrides({
+    const overrides = resolveRunOverrides({
       firecrawl: 'always',
       markdownMode: 'llm',
       preprocess: 'auto',
@@ -17,7 +17,7 @@ describe('daemon/request-settings', () => {
   })
 
   it('returns null for invalid modes', () => {
-    const overrides = resolveDaemonRunOverrides({
+    const overrides = resolveRunOverrides({
       firecrawl: 'nope',
       markdownMode: 'markdown',
       preprocess: 'yes',
@@ -30,7 +30,7 @@ describe('daemon/request-settings', () => {
   })
 
   it('parses timeout, retries, and max output tokens', () => {
-    const overrides = resolveDaemonRunOverrides({
+    const overrides = resolveRunOverrides({
       timeout: '90s',
       retries: '3',
       maxOutputTokens: '2k',
@@ -39,7 +39,7 @@ describe('daemon/request-settings', () => {
     expect(overrides.retries).toBe(3)
     expect(overrides.maxOutputTokensArg).toBe(2000)
 
-    const overridesNumeric = resolveDaemonRunOverrides({
+    const overridesNumeric = resolveRunOverrides({
       timeout: 15_000,
       retries: 2,
       maxOutputTokens: 512,

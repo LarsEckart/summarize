@@ -40,6 +40,16 @@ export type RunOverrides = {
   maxOutputTokensArg: number | null
 }
 
+export type RunOverridesInput = {
+  firecrawl?: unknown
+  markdownMode?: unknown
+  preprocess?: unknown
+  youtube?: unknown
+  timeout?: unknown
+  retries?: unknown
+  maxOutputTokens?: unknown
+}
+
 export function resolveSummaryLength(
   raw: unknown,
   fallback = 'xl'
@@ -89,92 +99,139 @@ export function resolveCliRunSettings({
   retries: string
   maxOutputTokens?: string | undefined
 }): ResolvedRunSettings {
+  const strictOverrides = resolveRunOverrides(
+    {
+      firecrawl,
+      markdownMode:
+        format === 'markdown'
+          ? ((markdownMode ?? markdown ?? 'readability') as string)
+          : 'off',
+      preprocess,
+      youtube,
+      timeout,
+      retries,
+      maxOutputTokens,
+    },
+    { strict: true }
+  )
+  const requireOverride = <T>(value: T | null, label: string): T => {
+    if (value == null) {
+      throw new Error(`Missing ${label} override value.`)
+    }
+    return value
+  }
+
   return {
     lengthArg: parseLengthArg(length),
-    firecrawlMode: parseFirecrawlMode(firecrawl),
-    markdownMode:
-      format === 'markdown'
-        ? parseMarkdownMode((markdownMode ?? markdown ?? 'readability') as string)
-        : 'off',
-    preprocessMode: parsePreprocessMode(preprocess),
-    youtubeMode: parseYoutubeMode(youtube),
-    timeoutMs: parseDurationMs(timeout),
-    retries: parseRetriesArg(retries),
-    maxOutputTokensArg: parseMaxOutputTokensArg(maxOutputTokens),
+    firecrawlMode: requireOverride(strictOverrides.firecrawlMode, '--firecrawl'),
+    markdownMode: requireOverride(strictOverrides.markdownMode, '--markdown-mode'),
+    preprocessMode: requireOverride(strictOverrides.preprocessMode, '--preprocess'),
+    youtubeMode: requireOverride(strictOverrides.youtubeMode, '--youtube'),
+    timeoutMs: requireOverride(strictOverrides.timeoutMs, '--timeout'),
+    retries: requireOverride(strictOverrides.retries, '--retries'),
+    maxOutputTokensArg: strictOverrides.maxOutputTokensArg,
   }
 }
 
-const parseOptionalSetting = <T>(raw: unknown, parse: (value: string) => T): T | null => {
+const parseOptionalSetting = <T>(
+  raw: unknown,
+  parse: (value: string) => T,
+  strict: boolean
+): T | null => {
   if (typeof raw !== 'string') return null
   try {
     return parse(raw)
-  } catch {
+  } catch (error) {
+    if (strict) throw error
     return null
   }
 }
 
-export function resolveRunOverrides({
-  firecrawl,
-  markdownMode,
-  preprocess,
-  youtube,
-  timeout,
-  retries,
-  maxOutputTokens,
-}: {
-  firecrawl?: unknown
-  markdownMode?: unknown
-  preprocess?: unknown
-  youtube?: unknown
-  timeout?: unknown
-  retries?: unknown
-  maxOutputTokens?: unknown
-}): RunOverrides {
+export function resolveRunOverrides(
+  {
+    firecrawl,
+    markdownMode,
+    preprocess,
+    youtube,
+    timeout,
+    retries,
+    maxOutputTokens,
+  }: RunOverridesInput,
+  options: { strict?: boolean } = {}
+): RunOverrides {
+  const strict = options.strict ?? false
   const timeoutMs = (() => {
-    if (typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0) {
-      return Math.floor(timeout)
+    if (typeof timeout === 'number') {
+      if (Number.isFinite(timeout) && timeout > 0) {
+        return Math.floor(timeout)
+      }
+      if (strict) {
+        throw new Error(`Unsupported --timeout: ${String(timeout)}`)
+      }
+      return null
     }
     if (typeof timeout !== 'string') return null
     try {
       return parseDurationMs(timeout)
-    } catch {
+    } catch (error) {
+      if (strict) throw error
       return null
     }
   })()
 
   const retriesResolved = (() => {
-    if (typeof retries === 'number' && Number.isFinite(retries) && Number.isInteger(retries)) {
-      return retries
+    if (typeof retries === 'number') {
+      if (Number.isFinite(retries) && Number.isInteger(retries)) {
+        try {
+          return parseRetriesArg(String(retries))
+        } catch (error) {
+          if (strict) throw error
+          return null
+        }
+      }
+      if (strict) {
+        throw new Error(`Unsupported --retries: ${String(retries)}`)
+      }
+      return null
     }
     if (typeof retries !== 'string') return null
     try {
       return parseRetriesArg(retries)
-    } catch {
+    } catch (error) {
+      if (strict) throw error
       return null
     }
   })()
 
   const maxOutputTokensArg = (() => {
-    if (
-      typeof maxOutputTokens === 'number' &&
-      Number.isFinite(maxOutputTokens) &&
-      maxOutputTokens > 0
-    ) {
-      return Math.floor(maxOutputTokens)
+    if (typeof maxOutputTokens === 'number') {
+      if (Number.isFinite(maxOutputTokens) && maxOutputTokens > 0) {
+        try {
+          return parseMaxOutputTokensArg(String(maxOutputTokens))
+        } catch (error) {
+          if (strict) throw error
+          return null
+        }
+      }
+      if (strict) {
+        throw new Error(`Unsupported --max-output-tokens: ${String(maxOutputTokens)}`)
+      }
+      return null
     }
     if (typeof maxOutputTokens !== 'string') return null
     try {
       return parseMaxOutputTokensArg(maxOutputTokens)
-    } catch {
+    } catch (error) {
+      if (strict) throw error
       return null
     }
   })()
 
   return {
-    firecrawlMode: parseOptionalSetting(firecrawl, parseFirecrawlMode),
-    markdownMode: parseOptionalSetting(markdownMode, parseMarkdownMode),
-    preprocessMode: parseOptionalSetting(preprocess, parsePreprocessMode),
-    youtubeMode: parseOptionalSetting(youtube, parseYoutubeMode),
+    firecrawlMode: parseOptionalSetting(firecrawl, parseFirecrawlMode, strict),
+    markdownMode: parseOptionalSetting(markdownMode, parseMarkdownMode, strict),
+    preprocessMode: parseOptionalSetting(preprocess, parsePreprocessMode, strict),
+    youtubeMode: parseOptionalSetting(youtube, parseYoutubeMode, strict),
     timeoutMs,
     retries: retriesResolved,
     maxOutputTokensArg,

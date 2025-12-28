@@ -12,13 +12,12 @@ import { resolveRunContextState } from '../run/run-context.js'
 import { createRunMetrics } from '../run/run-metrics.js'
 import { resolveModelSelection } from '../run/run-models.js'
 import { resolveDesiredOutputTokens } from '../run/run-output.js'
-import { createSummaryEngine } from '../run/summary-engine.js'
-
 import {
-  type DaemonRunOverrides,
-  resolveDaemonOutputLanguage,
-  resolveDaemonSummaryLength,
-} from './request-settings.js'
+  type RunOverrides,
+  resolveOutputLanguageSetting,
+  resolveSummaryLength,
+} from '../run/run-settings.js'
+import { createSummaryEngine } from '../run/summary-engine.js'
 
 type TextSink = {
   writeChunk: (text: string) => void
@@ -46,7 +45,7 @@ export type DaemonUrlFlowContextArgs = {
   lengthRaw: unknown
   languageRaw: unknown
   maxExtractCharacters: number | null
-  overrides?: DaemonRunOverrides | null
+  overrides?: RunOverrides | null
   hooks?: {
     onModelChosen?: ((modelId: string) => void) | null
     onExtracted?: ((extracted: ExtractedLinkContent) => void) | null
@@ -135,8 +134,8 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
   const fixedModelSpec: FixedModelSpec | null =
     requestedModel.kind === 'fixed' ? requestedModel : null
 
-  const { lengthArg } = resolveDaemonSummaryLength(lengthRaw)
-  const resolvedOverrides: DaemonRunOverrides = overrides ?? {
+  const { lengthArg } = resolveSummaryLength(lengthRaw)
+  const resolvedOverrides: RunOverrides = overrides ?? {
     firecrawlMode: null,
     markdownMode: null,
     preprocessMode: null,
@@ -197,7 +196,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
     providerBaseUrls,
   })
 
-  const outputLanguage = resolveDaemonOutputLanguage({
+  const outputLanguage = resolveOutputLanguageSetting({
     raw: languageRaw,
     fallback: outputLanguageFromConfig,
   })

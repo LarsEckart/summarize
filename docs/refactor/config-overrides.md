@@ -7,19 +7,19 @@ summary: "Refactor guide: unify CLI + daemon override parsing."
 Goal: single override parser for CLI + daemon.
 
 ## Steps
-- [ ] Inventory override paths.
+- [x] Inventory override paths.
   - Files: `src/run/run-settings.ts`, `src/daemon/request-settings.ts`.
-- [ ] Define shared override input type.
+- [x] Define shared override input type.
   - Flags + raw request fields + config defaults.
-- [ ] Create shared resolver.
+- [x] Create shared resolver.
   - New `resolveRunOverrides()` signature to cover both paths.
-- [ ] Migrate daemon.
+- [x] Migrate daemon.
   - Remove duplicate parsing in `request-settings`.
-- [ ] Migrate CLI.
+- [x] Migrate CLI.
   - Ensure identical precedence.
-- [ ] Add precedence tests.
+- [x] Add precedence tests.
   - Flag vs config vs request.
-- [ ] Verify behavior in smoke tests.
+- [x] Verify behavior in smoke tests.
 
 ## Done When
 - No duplicate override parsing.
