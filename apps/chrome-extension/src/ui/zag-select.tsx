@@ -29,7 +29,7 @@ export function useZagSelect({ id, items, value, onValueChange }: UseZagSelectAr
 
   const syncing = useRef(false)
 
-  const [state, send] = useMachine(select.machine, {
+  const { state, send } = useMachine(select.machine, {
     id,
     collection,
     positioning: { placement: 'bottom-start', gutter: 6, sameWidth: true },
