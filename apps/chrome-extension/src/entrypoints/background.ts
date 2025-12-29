@@ -1,6 +1,6 @@
 import { defineBackground } from 'wxt/utils/define-background'
 
-import { shouldPreferUrlMode } from '../../../../src/content/index.js'
+import { shouldPreferUrlMode } from '@steipete/summarize-core/content/url'
 import { parseSseEvent } from '../../../../src/shared/sse-events.js'
 import { buildDaemonRequestBody } from '../lib/daemon-payload'
 import { loadSettings, patchSettings } from '../lib/settings'
@@ -77,7 +77,7 @@ type ExtractResponse =
 const optionsWindowSize = { width: 940, height: 680 }
 const optionsWindowMin = { width: 820, height: 560 }
 const optionsWindowMargin = 20
-const MIN_CHAT_CHARS = 400
+const MIN_CHAT_CHARS = 100
 
 function resolveOptionsUrl(): string {
   const page = chrome.runtime.getManifest().options_ui?.page ?? 'options.html'
