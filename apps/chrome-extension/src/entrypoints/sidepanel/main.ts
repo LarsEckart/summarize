@@ -81,6 +81,7 @@ const modelPresetEl = byId<HTMLSelectElement>('modelPreset')
 const modelCustomEl = byId<HTMLInputElement>('modelCustom')
 const modelRefreshBtn = byId<HTMLButtonElement>('modelRefresh')
 const modelStatusEl = byId<HTMLDivElement>('modelStatus')
+const modelRowEl = byId<HTMLDivElement>('modelRow')
 
 const chatContainerEl = byId<HTMLElement>('chatContainer')
 const chatMessagesEl = byId<HTMLDivElement>('chatMessages')
@@ -818,6 +819,10 @@ function setDefaultModelPresets() {
   auto.value = 'auto'
   auto.textContent = 'Auto'
   modelPresetEl.append(auto)
+  const free = document.createElement('option')
+  free.value = 'free'
+  free.textContent = 'Free'
+  modelPresetEl.append(free)
   const custom = document.createElement('option')
   custom.value = 'custom'
   custom.textContent = 'Custom…'
@@ -853,16 +858,23 @@ function readCurrentModelValue(): string {
   })
 }
 
+function updateModelRowUI() {
+  const isCustom = modelPresetEl.value === 'custom'
+  modelCustomEl.hidden = !isCustom
+  modelRowEl.classList.toggle('isCustom', isCustom)
+  modelRefreshBtn.hidden = modelPresetEl.value !== 'free'
+}
+
 function setModelValue(value: string) {
   const next = value.trim() || defaultSettings.model
   const optionValues = new Set(Array.from(modelPresetEl.options).map((o) => o.value))
   if (optionValues.has(next) && next !== 'custom') {
     modelPresetEl.value = next
-    modelCustomEl.hidden = true
+    updateModelRowUI()
     return
   }
   modelPresetEl.value = 'custom'
-  modelCustomEl.hidden = false
+  updateModelRowUI()
   modelCustomEl.value = next
 }
 
@@ -876,14 +888,14 @@ function captureModelSelection() {
 function restoreModelSelection(selection: { presetValue: string; customValue: string }) {
   if (selection.presetValue === 'custom') {
     modelPresetEl.value = 'custom'
-    modelCustomEl.hidden = false
+    updateModelRowUI()
     modelCustomEl.value = selection.customValue
     return
   }
   const optionValues = new Set(Array.from(modelPresetEl.options).map((o) => o.value))
   if (optionValues.has(selection.presetValue) && selection.presetValue !== 'custom') {
     modelPresetEl.value = selection.presetValue
-    modelCustomEl.hidden = true
+    updateModelRowUI()
     return
   }
   setModelValue(selection.presetValue)
@@ -1438,6 +1450,7 @@ function updateControls(state: UiState) {
   if (readCurrentModelValue() !== state.settings.model) {
     setModelValue(state.settings.model)
   }
+  updateModelRowUI()
   modelRefreshBtn.disabled = !state.settings.tokenPresent || refreshFreeRunning
   if (panelState.currentSource) {
     if (state.tab.url && !urlsMatch(state.tab.url, panelState.currentSource.url)) {
@@ -1792,7 +1805,7 @@ sizeSmBtn.addEventListener('click', () => bumpFontSize(-1))
 sizeLgBtn.addEventListener('click', () => bumpFontSize(1))
 
 modelPresetEl.addEventListener('change', () => {
-  modelCustomEl.hidden = modelPresetEl.value !== 'custom'
+  updateModelRowUI()
   if (!modelCustomEl.hidden) modelCustomEl.focus()
   void (async () => {
     await patchSettings({ model: readCurrentModelValue() })
@@ -1861,7 +1874,7 @@ void (async () => {
   setDefaultModelPresets()
   setModelValue(s.model)
   setModelPlaceholderFromDiscovery({})
-  modelCustomEl.hidden = modelPresetEl.value !== 'custom'
+  updateModelRowUI()
   modelRefreshBtn.disabled = !s.token.trim()
   applyTypography(s.fontFamily, s.fontSize)
   applyTheme({ scheme: s.colorScheme, mode: s.colorMode })

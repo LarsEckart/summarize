@@ -661,17 +661,21 @@ button.ghost:hover {
 .sizeControl {
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--field-bg);
   overflow: hidden;
+  min-height: 34px;
+  width: 100%;
 }
 
 .sizeBtn {
+  flex: 1;
   border: 0;
   background: transparent;
-  padding: 6px 10px;
-  min-width: 30px;
+  padding: 7px 10px;
+  min-width: 0;
   color: var(--text);
   font: inherit;
   font-weight: 700;
@@ -691,7 +695,7 @@ button.ghost:hover {
 .sizeDivider {
   width: 1px;
   align-self: stretch;
-  background: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--border) 90%, transparent);
 }
 
 .drawer .toggleRow {
@@ -822,6 +826,7 @@ button.ghost:hover {
 }
 
 .drawerAdvanced .modelRow {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
@@ -831,6 +836,14 @@ button.ghost:hover {
   padding: 6px 10px;
   font-size: 11px;
   min-height: 32px;
+}
+
+.drawerAdvanced .modelRow.isCustom {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) auto;
+}
+
+.drawerAdvanced .modelRow input {
+  height: 32px;
 }
 
 .modelStatus {
@@ -1035,6 +1048,15 @@ select {
 
 .pickerPositioner[data-picker="scheme"] {
   width: min(max(176px, calc(var(--reference-width, 0px) + 8px)), var(--available-width, 100vw));
+  max-width: var(--available-width, 100vw);
+}
+
+.pickerPositioner[data-picker="font"] .pickerContent {
+  min-width: min(194px, 100%);
+}
+
+.pickerPositioner[data-picker="font"] {
+  width: min(max(194px, calc(var(--reference-width, 0px) + 12px)), var(--available-width, 100vw));
   max-width: var(--available-width, 100vw);
 }
 

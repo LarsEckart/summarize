@@ -50,24 +50,25 @@
         <div class="drawerAdvancedBody">
           <label class="wide">
             <span>Model</span>
-            <div class="combo modelRow">
+            <div id="modelRow" class="combo modelRow">
               <select id="modelPreset">
                 <option value="auto">Auto</option>
+                <option value="free">Free</option>
                 <option value="custom">Custom…</option>
               </select>
+              <input
+                id="modelCustom"
+                type="text"
+                placeholder="custom model id"
+                autocapitalize="off"
+                autocomplete="off"
+                spellcheck="false"
+                hidden
+              />
               <button id="modelRefresh" type="button" class="ghost small" title="Refresh free models">
                 Scan free
               </button>
             </div>
-            <input
-              id="modelCustom"
-              type="text"
-              placeholder="auto"
-              autocapitalize="off"
-              autocomplete="off"
-              spellcheck="false"
-              hidden
-            />
             <div id="modelStatus" class="modelStatus" role="status" aria-live="polite"></div>
           </label>
         </div>
