@@ -3,6 +3,7 @@ import { defineBackground } from 'wxt/utils/define-background'
 import { parseSseEvent } from '../../../../src/shared/sse-events.js'
 import { buildChatPageContent } from '../lib/chat-context'
 import { buildDaemonRequestBody } from '../lib/daemon-payload'
+import { createDaemonRecovery, isDaemonUnreachableError } from '../lib/daemon-recovery'
 import { loadSettings, patchSettings } from '../lib/settings'
 import { parseSseStream } from '../lib/sse'
 
@@ -172,16 +173,6 @@ function friendlyFetchError(err: unknown, context: string): string {
   return `${context}: ${message}`
 }
 
-function isDaemonUnreachableError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err)
-  const normalized = message.toLowerCase()
-  return (
-    normalized.includes('failed to fetch') ||
-    normalized.includes('networkerror') ||
-    normalized.includes('econnrefused')
-  )
-}
-
 function normalizeUrl(value: string) {
   try {
     const url = new URL(value)
@@ -266,12 +257,11 @@ async function extractFromTab(
 export default defineBackground(() => {
   let panelOpen = false
   let panelLastPingAt = 0
-  let lastDaemonReady: boolean | null = null
-  let pendingAutoUrl: string | null = null
   let lastSummarizedUrl: string | null = null
   let inflightUrl: string | null = null
   let runController: AbortController | null = null
   let lastNavAt = 0
+  const daemonRecovery = createDaemonRecovery()
   type CachedExtract = {
     url: string
     title: string | null
@@ -464,8 +454,19 @@ export default defineBackground(() => {
     const health = await daemonHealth()
     const authed = settings.token.trim() ? await daemonPing(settings.token.trim()) : { ok: false }
     const daemonReady = health.ok && authed.ok
-    const prevReady = lastDaemonReady
-    lastDaemonReady = daemonReady
+    const pendingUrl = daemonRecovery.getPendingUrl()
+    const currentUrlMatches = Boolean(pendingUrl && tab?.url && urlsMatch(tab.url, pendingUrl))
+    const isIdle = !runController && !inflightUrl
+    let shouldRecover = false
+    if (opts?.checkRecovery) {
+      shouldRecover = daemonRecovery.maybeRecover({
+        isReady: daemonReady,
+        currentUrlMatches,
+        isIdle,
+      })
+    } else {
+      daemonRecovery.updateStatus(daemonReady)
+    }
     const state: UiState = {
       panelOpen: isPanelOpen(),
       daemon: { ok: health.ok, authed: authed.ok, error: health.error ?? authed.error },
@@ -482,20 +483,13 @@ export default defineBackground(() => {
     }
     void send({ type: 'ui:state', state })
 
-    if (
-      opts?.checkRecovery &&
-      pendingAutoUrl &&
-      prevReady === false &&
-      daemonReady &&
-      !runController &&
-      !inflightUrl &&
-      tab?.url &&
-      urlsMatch(tab.url, pendingAutoUrl)
-    ) {
-      pendingAutoUrl = null
+    if (shouldRecover) {
       void summarizeActiveTab('daemon-recovered')
-    } else if (pendingAutoUrl && tab?.url && !urlsMatch(tab.url, pendingAutoUrl)) {
-      pendingAutoUrl = null
+      return
+    }
+
+    if (pendingUrl && tab?.url && !currentUrlMatches) {
+      daemonRecovery.clearPending()
     }
   }
 
@@ -618,8 +612,7 @@ export default defineBackground(() => {
       sendStatus(`Error: ${message}`)
       inflightUrl = null
       if (!isManual && isDaemonUnreachableError(err)) {
-        lastDaemonReady = false
-        pendingAutoUrl = resolvedPayload.url
+        daemonRecovery.recordFailure(resolvedPayload.url)
       }
       return
     }
@@ -767,6 +760,7 @@ export default defineBackground(() => {
             inflightUrl = null
             runController?.abort()
             runController = null
+            daemonRecovery.clearPending()
             void emitState('')
             void summarizeActiveTab('panel-open')
             break
@@ -778,6 +772,7 @@ export default defineBackground(() => {
             lastSummarizedUrl = null
             inflightUrl = null
             cachedExtracts.clear()
+            daemonRecovery.clearPending()
             break
           case 'panel:summarize':
             void summarizeActiveTab((msg as { refresh?: boolean }).refresh ? 'refresh' : 'manual', {
