@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
 const captions = vi.hoisted(() => ({
   fetchTranscriptFromCaptionTracks: vi.fn(),
   extractYoutubeDurationSeconds: vi.fn(),
+  fetchYoutubeDurationSecondsViaPlayer: vi.fn(),
 }))
 const apify = vi.hoisted(() => ({
   fetchTranscriptWithApify: vi.fn(),
@@ -38,6 +39,7 @@ describe('YouTube transcript provider module', () => {
     api.fetchTranscriptFromTranscriptEndpoint.mockResolvedValue(null)
     captions.fetchTranscriptFromCaptionTracks.mockResolvedValue(null)
     captions.extractYoutubeDurationSeconds.mockReturnValue(null)
+    captions.fetchYoutubeDurationSecondsViaPlayer.mockResolvedValue(null)
     apify.fetchTranscriptWithApify.mockResolvedValue(null)
     ytdlp.fetchTranscriptWithYtDlp.mockResolvedValue({
       text: null,
@@ -228,6 +230,31 @@ describe('YouTube transcript provider module', () => {
     expect(api.extractYoutubeiTranscriptConfig).not.toHaveBeenCalled()
     expect(apify.fetchTranscriptWithApify).not.toHaveBeenCalled()
     expect(ytdlp.fetchTranscriptWithYtDlp).not.toHaveBeenCalled()
+  })
+
+  it('falls back to player duration when html lacks lengthSeconds', async () => {
+    captions.fetchTranscriptFromCaptionTracks.mockResolvedValue('Creator caption')
+    captions.extractYoutubeDurationSeconds.mockReturnValue(null)
+    captions.fetchYoutubeDurationSecondsViaPlayer.mockResolvedValue(2220)
+
+    const result = await fetchTranscript(
+      {
+        url: 'https://www.youtube.com/watch?v=abcdefghijk',
+        html: '<html></html>',
+        resourceKey: null,
+      },
+      {
+        ...baseOptions,
+        youtubeTranscriptMode: 'no-auto',
+      }
+    )
+
+    expect(result.metadata).toEqual({
+      provider: 'captionTracks',
+      manualOnly: true,
+      durationSeconds: 2220,
+    })
+    expect(captions.fetchYoutubeDurationSecondsViaPlayer).toHaveBeenCalled()
   })
 
   it('falls back to yt-dlp in no-auto mode when no creator captions found', async () => {

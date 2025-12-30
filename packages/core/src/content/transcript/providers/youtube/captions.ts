@@ -127,20 +127,8 @@ function extractDurationSecondsFromHtml(html: string): number | null {
 export function extractYoutubeDurationSeconds(html: string): number | null {
   const playerResponse = extractInitialPlayerResponse(html)
   if (playerResponse) {
-    const videoDetails = playerResponse.videoDetails
-    if (isObjectLike(videoDetails)) {
-      const duration = coerceDurationSeconds(videoDetails.lengthSeconds)
-      if (duration) return duration
-    }
-
-    const microformat = playerResponse.microformat
-    if (isObjectLike(microformat)) {
-      const renderer = microformat.playerMicroformatRenderer
-      if (isObjectLike(renderer)) {
-        const duration = coerceDurationSeconds(renderer.lengthSeconds)
-        if (duration) return duration
-      }
-    }
+    const duration = extractDurationSecondsFromPlayerPayload(playerResponse)
+    if (duration) return duration
   }
 
   return extractDurationSecondsFromHtml(html)
@@ -169,6 +157,77 @@ type CaptionTrackRecord = Record<string, unknown> & {
 }
 type CaptionEventRecord = Record<string, unknown> & { segs?: unknown }
 type CaptionSegmentRecord = Record<string, unknown> & { utf8?: unknown }
+
+function extractDurationSecondsFromPlayerPayload(payload: Record<string, unknown>): number | null {
+  const videoDetails = payload.videoDetails
+  if (isObjectLike(videoDetails)) {
+    const duration = coerceDurationSeconds(videoDetails.lengthSeconds)
+    if (duration) return duration
+  }
+
+  const microformat = payload.microformat
+  if (isObjectLike(microformat)) {
+    const renderer = microformat.playerMicroformatRenderer
+    if (isObjectLike(renderer)) {
+      const duration = coerceDurationSeconds(renderer.lengthSeconds)
+      if (duration) return duration
+    }
+  }
+
+  return null
+}
+
+async function fetchYoutubePlayerPayload(
+  fetchImpl: typeof fetch,
+  { html, videoId }: { html: string; videoId: string }
+): Promise<Record<string, unknown> | null> {
+  const apiKey = extractInnertubeApiKey(html)
+  if (!apiKey) return null
+
+  try {
+    const userAgent =
+      REQUEST_HEADERS['User-Agent'] ??
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+
+    const response = await fetchWithTimeout(
+      fetchImpl,
+      `https://www.youtube.com/youtubei/v1/player?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': userAgent,
+          'Accept-Language': REQUEST_HEADERS['Accept-Language'] ?? 'en-US,en;q=0.9',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'ANDROID',
+              clientVersion: '20.10.38',
+            },
+          },
+          videoId,
+        }),
+      }
+    )
+
+    if (!response.ok) return null
+    const parsed: unknown = await response.json()
+    return isObjectLike(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export async function fetchYoutubeDurationSecondsViaPlayer(
+  fetchImpl: typeof fetch,
+  { html, videoId }: { html: string; videoId: string }
+): Promise<number | null> {
+  const payload = await fetchYoutubePlayerPayload(fetchImpl, { html, videoId })
+  if (!payload) return null
+  return extractDurationSecondsFromPlayerPayload(payload)
+}
 
 async function fetchTranscriptViaAndroidPlayer(
   fetchImpl: typeof fetch,

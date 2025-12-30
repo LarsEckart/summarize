@@ -12,7 +12,11 @@ import {
   fetchTranscriptFromTranscriptEndpoint,
 } from './youtube/api.js'
 import { fetchTranscriptWithApify } from './youtube/apify.js'
-import { extractYoutubeDurationSeconds, fetchTranscriptFromCaptionTracks } from './youtube/captions.js'
+import {
+  extractYoutubeDurationSeconds,
+  fetchTranscriptFromCaptionTracks,
+  fetchYoutubeDurationSecondsViaPlayer,
+} from './youtube/captions.js'
 import { fetchTranscriptWithYtDlp } from './youtube/yt-dlp.js'
 
 const YOUTUBE_URL_PATTERN = /youtube\.com|youtu\.be/i
@@ -73,12 +77,6 @@ export const fetchTranscript = async (
     return { text: null, source: null, attemptedProviders }
   }
 
-  const durationSeconds = extractYoutubeDurationSeconds(html)
-  const durationMetadata =
-    typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0
-      ? { durationSeconds }
-      : null
-
   const tryApify = async (hint: string): Promise<ProviderResult | null> => {
     if (!options.apifyApiToken) return null
     pushHint(hint)
@@ -106,6 +104,18 @@ export const fetchTranscript = async (
   if (!effectiveVideoId) {
     return { text: null, source: null, attemptedProviders }
   }
+
+  let durationSeconds = extractYoutubeDurationSeconds(html)
+  if (!durationSeconds) {
+    durationSeconds = await fetchYoutubeDurationSecondsViaPlayer(options.fetch, {
+      html,
+      videoId: effectiveVideoId,
+    })
+  }
+  const durationMetadata =
+    typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0
+      ? { durationSeconds }
+      : null
 
   // Try no-auto mode (skip auto-generated captions, fall back to yt-dlp)
   if (mode === 'no-auto') {
