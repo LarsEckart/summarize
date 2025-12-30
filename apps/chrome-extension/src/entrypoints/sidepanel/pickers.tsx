@@ -58,7 +58,7 @@ const formatCount = (value: number) => value.toLocaleString()
 
 const formatWordCount = (value: number | null | undefined) => {
   if (!value || !Number.isFinite(value)) return null
-  return `${formatCount(value)} words`
+  return `${formatCount(value)}w`
 }
 
 const formatDuration = (seconds: number | null | undefined) => {
@@ -470,7 +470,7 @@ function SummarizeControl(props: SummarizeControlProps) {
 
   const selectedValue = api.value[0] ?? ''
   const selectedLabel =
-    api.valueAsString || sourceItems.find((item) => item.value === selectedValue)?.label || 'Page'
+    selectedValue === 'video' ? props.videoLabel ?? 'Video' : 'Page'
 
   const positionerProps = api.getPositionerProps()
   const positionerStyle = {
@@ -548,7 +548,7 @@ function SummarizeControl(props: SummarizeControlProps) {
         onPointerDown={onPointerDown}
         onKeyDown={onKeyDown}
       >
-        Summarize
+        Summarize · {selectedLabel}
       </button>
       {portalRoot ? createPortal(content, portalRoot) : content}
       <select className="pickerHidden" {...api.getHiddenSelectProps()} />

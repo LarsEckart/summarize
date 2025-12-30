@@ -64,5 +64,8 @@ export function buildSummarizeRequestBody({
   if (inputMode === 'video') {
     return { ...baseBody, mode: 'url', videoMode: 'transcript' }
   }
+  if (inputMode === 'page') {
+    return { ...baseBody, mode: 'page' }
+  }
   return baseBody
 }
