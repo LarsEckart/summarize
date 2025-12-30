@@ -81,6 +81,12 @@ The daemon decides the best pipeline:
 - Normal articles with extracted text → prefer **page** pipeline (“what you see”).
 - Fallback: if the preferred path fails before output starts, try the other input (when available).
 
+## Video Selection (Page vs Video)
+
+When the page contains embedded audio/video, the side panel shows a small Page/Video (or Page/Audio) dropdown next to “Summarize”. Selecting the media option forces URL mode with transcript-first extraction (captions → yt-dlp/Whisper fallback). Selection is per-run (not persisted).
+
+See `docs/media.md` for detection and transcript rules.
+
 ## SPA Navigation
 
 - Background listens to `chrome.webNavigation.onHistoryStateUpdated` (SPA route changes) and `tabs.onUpdated` (page loads).
