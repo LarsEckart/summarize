@@ -285,10 +285,11 @@ export default defineBackground(() => {
       throw new Error('Cannot chat on this page')
     }
 
+    const preferUrl = shouldPreferUrlMode(tab.url)
     const cached = getCachedExtract(tab.id, tab.url)
-    if (cached) return cached
+    if (cached && (!preferUrl || cached.source === 'url')) return cached
 
-    if (!shouldPreferUrlMode(tab.url)) {
+    if (!preferUrl) {
       const extractedAttempt = await extractFromTab(tab.id, CHAT_FULL_TRANSCRIPT_MAX_CHARS)
       if (extractedAttempt.ok) {
         const extracted = extractedAttempt.data
@@ -475,11 +476,24 @@ export default defineBackground(() => {
 
     const resolvedTitle = tab.title?.trim() || extracted.title || null
     const resolvedExtracted = { ...extracted, title: resolvedTitle }
+    const wordCount =
+      extracted.text.length > 0 ? extracted.text.split(/\s+/).filter(Boolean).length : 0
 
     cachedExtracts.set(tab.id, {
       url: extracted.url,
       title: resolvedTitle,
       text: extracted.text,
+      source: 'page',
+      truncated: extracted.truncated,
+      totalCharacters: extracted.text.length,
+      wordCount,
+      transcriptSource: null,
+      transcriptionProvider: null,
+      transcriptCharacters: null,
+      transcriptWordCount: null,
+      transcriptLines: null,
+      mediaDurationSeconds: null,
+      diagnostics: null,
     })
 
     sendStatus('Requesting daemon…')
