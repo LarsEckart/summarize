@@ -629,6 +629,7 @@ button.ghost:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
+  --drawer-control-height: 32px;
 }
 
 #pickersRoot {
@@ -952,6 +953,13 @@ label.length.mini .combo {
 label.length.mini .pickerTrigger {
   padding: 6px 10px;
   min-width: 92px;
+}
+
+.drawerGrid .pickerTrigger,
+.drawerGrid .sizeControl,
+.drawerGrid .lineHeightControl {
+  min-height: var(--drawer-control-height);
+  height: var(--drawer-control-height);
 }
 
 label.length.mini .lengthCustomRow {
