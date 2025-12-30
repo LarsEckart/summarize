@@ -28,11 +28,6 @@
 - Hover summaries: proxy localhost daemon calls to avoid Chrome “Local network access” prompts.
 - Install: use npm releases for osc-progress/tokentally instead of git deps.
 
-### Dev
-
-- CI/check now runs extension e2e; expanded coverage for media duration, hover summaries, free-model refresh, and GPT‑5 streaming.
-- Tooling: ignore packed `.tgz`/`.zip` artifacts in git.
-
 ## 0.8.2 - 2025-12-28
 
 ### Breaking
