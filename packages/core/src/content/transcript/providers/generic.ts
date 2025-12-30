@@ -41,9 +41,12 @@ export const fetchTranscript = async (
       ? (embedded?.mediaUrl ?? (isDirectMediaUrl(context.url) ? context.url : null))
       : null
 
-  if (mediaUrl && options.mediaTranscriptMode === 'prefer') {
+  if (
+    options.mediaTranscriptMode === 'prefer' &&
+    (mediaUrl || embedded?.kind || isDirectMediaUrl(context.url))
+  ) {
     const result = await fetchDirectMediaTranscript({
-      url: mediaUrl,
+      url: mediaUrl ?? context.url,
       options,
       notes,
       attemptedProviders,
@@ -185,8 +188,11 @@ function detectEmbeddedMedia(html: string, baseUrl: string): EmbeddedMedia | nul
     return { kind: 'audio', mediaUrl, track }
   }
 
-  if (track) {
-    return { kind: 'video', mediaUrl: null, track }
+  const hasVideoTag = $('video').length > 0
+  const hasAudioTag = !hasVideoTag && $('audio').length > 0
+
+  if (track || hasVideoTag || hasAudioTag) {
+    return { kind: hasAudioTag ? 'audio' : 'video', mediaUrl: null, track }
   }
 
   return null
