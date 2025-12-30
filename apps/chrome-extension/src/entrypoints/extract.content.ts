@@ -36,12 +36,63 @@ function resolveMediaDurationSeconds(): number | null {
   return resolveMediaDurationSecondsFromData({ metaDuration, uiDuration, videoDuration })
 }
 
+const VIDEO_IFRAME_PATTERNS = [
+  /youtube\.com/i,
+  /youtu\.be/i,
+  /youtube-nocookie\.com/i,
+  /player\.vimeo\.com/i,
+  /vimeo\.com\/video/i,
+  /player\.twitch\.tv/i,
+  /fast\.wistia\.net/i,
+  /wistia\.com/i,
+]
+
+const AUDIO_IFRAME_PATTERNS = [
+  /open\.spotify\.com/i,
+  /spotify\.com\/embed/i,
+  /soundcloud\.com/i,
+  /podcasts\.apple\.com/i,
+  /overcast\.fm/i,
+  /pca\.st/i,
+  /anchor\.fm/i,
+]
+
+function hasMetaTag(selectors: string[]): boolean {
+  return selectors.some((selector) => Boolean(document.querySelector(selector)))
+}
+
+function hasEmbeddedFrame(patterns: RegExp[]): boolean {
+  const frames = Array.from(document.querySelectorAll('iframe[src]')) as HTMLIFrameElement[]
+  return frames.some((frame) => patterns.some((pattern) => pattern.test(frame.src)))
+}
+
 function detectMediaInfo(): { hasVideo: boolean; hasAudio: boolean; hasCaptions: boolean } {
-  const hasVideo = Boolean(document.querySelector('video'))
-  const hasAudio = Boolean(document.querySelector('audio'))
+  const hasVideoTag = Boolean(document.querySelector('video'))
+  const hasAudioTag = Boolean(document.querySelector('audio'))
   const hasCaptions = Boolean(
     document.querySelector('track[kind="captions"], track[kind="subtitles"]')
   )
+  const hasOgVideo = hasMetaTag([
+    'meta[property="og:video"]',
+    'meta[property="og:video:url"]',
+    'meta[property="og:video:secure_url"]',
+    'meta[name="og:video"]',
+    'meta[name="og:video:url"]',
+    'meta[name="og:video:secure_url"]',
+    'meta[name="twitter:player"]',
+  ])
+  const hasOgAudio = hasMetaTag([
+    'meta[property="og:audio"]',
+    'meta[property="og:audio:url"]',
+    'meta[property="og:audio:secure_url"]',
+    'meta[name="og:audio"]',
+    'meta[name="og:audio:url"]',
+    'meta[name="og:audio:secure_url"]',
+  ])
+  const hasVideoEmbed = hasEmbeddedFrame(VIDEO_IFRAME_PATTERNS)
+  const hasAudioEmbed = hasEmbeddedFrame(AUDIO_IFRAME_PATTERNS)
+  const hasVideo = hasVideoTag || hasOgVideo || hasVideoEmbed
+  const hasAudio = hasAudioTag || hasOgAudio || hasAudioEmbed
   return { hasVideo, hasAudio, hasCaptions }
 }
 

@@ -411,9 +411,7 @@ function SidepanelPickers(props: SidepanelPickerProps) {
         api={fontApi}
         items={fontItems}
         triggerContent={(label, value) => (
-          <span style={value ? { fontFamily: value } : undefined}>
-            {label || 'San Francisco'}
-          </span>
+          <span style={value ? { fontFamily: value } : undefined}>{label || 'San Francisco'}</span>
         )}
         optionContent={(item) => <span style={{ fontFamily: item.value }}>{item.label}</span>}
       />
@@ -471,7 +469,8 @@ function SummarizeControl(props: SummarizeControlProps) {
   })
 
   const selectedValue = api.value[0] ?? ''
-  const selectedLabel = selectedValue === 'video' ? props.videoLabel ?? 'Video' : 'Page'
+  const selectedLabel =
+    api.valueAsString || sourceItems.find((item) => item.value === selectedValue)?.label || 'Page'
 
   const positionerProps = api.getPositionerProps()
   const positionerStyle = {
