@@ -344,7 +344,7 @@ Shorthand (equivalent):
 
 Also supported:
 
-- `model: { "mode": "auto" }` (automatic model selection + fallback; see `docs/model-auto.md`)
+- `model: { "mode": "auto" }` (automatic model selection + fallback; see [docs/model-auto.md](docs/model-auto.md))
 - `model.rules` (customize candidates / ordering)
 - `models` (define presets selectable via `--model <preset>`)
 - `media.videoMode: "auto"|"transcript"|"understand"`
@@ -463,13 +463,13 @@ pnpm check
 
 ## More
 
-- Docs index: `docs/README.md`
-- CLI providers and config: `docs/cli.md`
-- Auto model rules: `docs/model-auto.md`
-- Website extraction: `docs/website.md`
-- YouTube handling: `docs/youtube.md`
-- Media pipeline: `docs/media.md`
-- Config schema and precedence: `docs/config.md`
+- Docs index: [docs/README.md](docs/README.md)
+- CLI providers and config: [docs/cli.md](docs/cli.md)
+- Auto model rules: [docs/model-auto.md](docs/model-auto.md)
+- Website extraction: [docs/website.md](docs/website.md)
+- YouTube handling: [docs/youtube.md](docs/youtube.md)
+- Media pipeline: [docs/media.md](docs/media.md)
+- Config schema and precedence: [docs/config.md](docs/config.md)
 
 ## Troubleshooting
 
